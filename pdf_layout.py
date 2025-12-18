@@ -10,87 +10,95 @@ def draw_cover(canvas, data):
     """
     Dibuja la portada del documento
     """
-    def draw_cover(canvas, data):
-        if not os.path.exists(data["imagen_portada"]):
-            raise FileNotFoundError(
-                f"No se encontró la imagen de portada: {data['imagen_portada']}"
-            )
-    canvas.setFont("Helvetica-Bold", 24)
-    canvas.drawCentredString(
-        PAGE_WIDTH / 2,
-        PAGE_HEIGHT - 120,
-        data["titulo"]
-    )
+    # Fondo claro opcional
+    canvas.setFillColorRGB(0.95, 0.95, 0.95)
+    canvas.rect(0, 0, PAGE_WIDTH, PAGE_HEIGHT, fill=1, stroke=0)
 
-    canvas.setFont("Helvetica", 12)
-    canvas.drawCentredString(
-        PAGE_WIDTH / 2,
-        PAGE_HEIGHT - 160,
-        data.get("info_extra", "")
-    )
-
-    if data.get("imagen_portada"):
+    # Imagen de portada (opcional)
+    imagen = data.get("imagen_portada")
+    if imagen and os.path.exists(imagen):
         canvas.drawImage(
-            data["imagen_portada"],
+            imagen,
             MARGIN,
-            PAGE_HEIGHT / 2 - 150,
+            PAGE_HEIGHT / 2 - 160,
             width=PAGE_WIDTH - 2 * MARGIN,
-            height=300,
-            preserveAspectRatio=True
+            height=320,
+            preserveAspectRatio=True,
+            mask="auto",
         )
+
+    # Título
+    canvas.setFillColorRGB(0, 0, 0)
+    canvas.setFont("Helvetica-Bold", 26)
+    canvas.drawCentredString(PAGE_WIDTH / 2, PAGE_HEIGHT - 140, data.get("titulo", ""))
+
+    # Subtítulo / info extra
+    canvas.setFont("Helvetica", 14)
+    canvas.drawCentredString(
+        PAGE_WIDTH / 2, PAGE_HEIGHT - 180, data.get("info_extra", "")
+    )
 
     canvas.showPage()
 
 
 def draw_header_footer(canvas, page_num, data):
-    """
-    Header y pie de página
-    """
-    # Header
-    if data.get("logo_izq"):
-        canvas.drawImage(
-            data["logo_izq"],
-            MARGIN,
-            PAGE_HEIGHT - 50,
-            width=60,
-            height=30,
-            preserveAspectRatio=True
-        )
+    logo_size = 40
+    padding = 20
 
-    if data.get("logo_der"):
-        canvas.drawImage(
-            data["logo_der"],
-            PAGE_WIDTH - MARGIN - 60,
-            PAGE_HEIGHT - 50,
-            width=60,
-            height=30,
-            preserveAspectRatio=True
-        )
-
-    # Footer
-    canvas.setFont("Helvetica", 9)
-    canvas.setFillColor(black)
-    canvas.drawCentredString(
-        PAGE_WIDTH / 2,
-        25,
-        f"Página {page_num}"
+    # Esquinas superiores
+    canvas.drawImage(
+        data["logo_izq"],
+        padding,
+        PAGE_HEIGHT - logo_size - padding,
+        width=logo_size,
+        height=logo_size,
+        mask="auto",
     )
 
+    canvas.drawImage(
+        data["logo_der"],
+        PAGE_WIDTH - logo_size - padding,
+        PAGE_HEIGHT - logo_size - padding,
+        width=logo_size,
+        height=logo_size,
+        mask="auto",
+    )
 
-def draw_section_title(canvas, title):
-    """
-    Título de cada sección
-    """
+    # Esquinas inferiores
+    canvas.drawImage(
+        data["logo_izq"],
+        padding,
+        padding,
+        width=logo_size,
+        height=logo_size,
+        mask="auto",
+    )
+
+    canvas.drawImage(
+        data["logo_der"],
+        PAGE_WIDTH - logo_size - padding,
+        padding,
+        width=logo_size,
+        height=logo_size,
+        mask="auto",
+    )
+
+    # Número de página
+    canvas.setFont("Helvetica", 8)
+    canvas.drawCentredString(PAGE_WIDTH / 2, 15, f"Página {page_num}")
+
+
+def draw_section_title(canvas, title, y=None):
+    if y is None:
+        y = PAGE_HEIGHT - 100
+        
     canvas.setFont("Helvetica-Bold", 18)
-    canvas.drawString(
-        MARGIN,
-        PAGE_HEIGHT - 100,
-        title
-    )
+    canvas.drawString(MARGIN, y, title)
+    canvas.line(MARGIN, y - 10, PAGE_WIDTH - MARGIN, y - 10)
+    return y - 40  # espacio reservado
 
-    canvas.line(
-        MARGIN,
-        PAGE_HEIGHT - 110,
-        PAGE_WIDTH - MARGIN,
-        PAGE_HEIGHT - 110
-    )
+
+def draw_subsection_title(canvas, text, y):
+    canvas.setFont("Helvetica-Bold", 14)
+    canvas.drawString(MARGIN, y, text)
+    return y - 30
