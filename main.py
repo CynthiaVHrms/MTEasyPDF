@@ -235,26 +235,34 @@ def main():
         },
     )
 
-        cursor_y = draw_section_title(c, "Ubicación")
+    cursor_y = draw_section_title(c, "Ubicación")
 
-        # decidir layout
-        if len(imagenes_restantes) == 1:
-            per_page = 1
-        else:
-            per_page = 2
+    # decidir layout
+    if len(imagenes_restantes) == 1:
+        per_page = 1
+    else:
+        per_page = 2
 
-        imagenes_restantes = draw_images(
-            c,
-            imagenes_restantes,
-            per_page=per_page,
-            start_y=cursor_y,
-        )
+    imagenes_restantes = draw_images(
+        c,
+        imagenes_restantes,
+        per_page=per_page,
+        start_y=cursor_y,
+    )
 
-        if imagenes_restantes:
-            c.showPage()
-            page_num += 1
-            cursor_y = PAGE_HEIGHT - 100
+    if imagenes_restantes:
+        c.showPage()
+        page_num += 1
 
+
+    # reservar espacio por las imágenes de ubicación
+    if len(data["ubicacion"]) == 1:
+        cursor_y -= 480
+    else:
+        cursor_y -= 520
+
+    # PRUEBA: mantenimiento (todas como 4 por hoja por ahora)
+    current_folder = None
 
     # =========================
     # MANTENIMIENTO
@@ -326,6 +334,8 @@ def main():
                 page_num, cursor_y = nueva_pagina_con_titulo(
                     c, page_num, project_data, niveles["seccion"]
                 )
+
+
 
             cursor_y -= 12
             draw_subsection_title(c, niveles["subseccion"], cursor_y)
