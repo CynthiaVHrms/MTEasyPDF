@@ -10,6 +10,7 @@ from pdf_layout import (
     draw_header_footer,
     draw_section_title,
     draw_subsection_title,
+    nueva_pagina_con_titulo,
 )
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -128,10 +129,13 @@ def nueva_pagina(canvas, page_num, project_data):
         canvas,
         page_num,
         {
-            "logo_izq": project_data["logo_sup_izq"],
-            "logo_der": project_data["logo_sup_der"],
+            "logo_sup_izq": project_data["logo_sup_izq"],
+            "logo_sup_der": project_data["logo_sup_der"],
+            "logo_inf_izq": project_data["logo_inf_izq"],
+            "logo_inf_der": project_data["logo_inf_der"],
         },
     )
+
     return page_num
 
 
@@ -160,13 +164,23 @@ def obtener_niveles(path, raiz):
 def asegurar_espacio_para_imagenes(
     canvas, page_num, project_data, cursor_y, layout_actual
 ):
-    alto_bloque = 620 if layout_actual == 4 else 520
+    margen_seguridad = 150
 
-    if cursor_y - alto_bloque < 150:
+    if cursor_y < margen_seguridad:
         page_num = nueva_pagina(canvas, page_num, project_data)
         cursor_y = PAGE_HEIGHT - 100
 
     return page_num, cursor_y
+
+
+
+def altura_layout(layout):
+    if layout == 4:
+        return 620
+    if layout == 2:
+        return 520
+    return 480
+
 
 
 def main():
@@ -187,37 +201,60 @@ def main():
             "info_extra": project_data["info_extra"],
             "imagen_portada": project_data["imagen_portada"],
         },
+        project_data,
+    )
+    
+    # Header/footer también en la portada
+    draw_header_footer(
+        c,
+        page_num,
+        {
+            "logo_sup_izq": project_data["logo_sup_izq"],
+            "logo_sup_der": project_data["logo_sup_der"],
+            "logo_inf_izq": project_data["logo_inf_izq"],
+            "logo_inf_der": project_data["logo_inf_der"],
+        },
     )
 
-    # PRUEBA: ubicación
-    if data["ubicacion"]:
-        page_num = nueva_pagina(c, page_num, project_data)
+    # =========================
+    # UBICACIÓN
+    # =========================
+    page_num = 1
 
-    cursor_y = draw_section_title(c, "Ubicación")
+    imagenes_restantes = data["ubicacion"][:]
 
-    if len(data["ubicacion"]) == 1:
-        draw_images(
+    while imagenes_restantes:
+        draw_header_footer(
+        c,
+        page_num,
+        {
+            "logo_sup_izq": project_data["logo_sup_izq"],
+            "logo_sup_der": project_data["logo_sup_der"],
+            "logo_inf_izq": project_data["logo_inf_izq"],
+            "logo_inf_der": project_data["logo_inf_der"],
+        },
+    )
+
+        cursor_y = draw_section_title(c, "Ubicación")
+
+        # decidir layout
+        if len(imagenes_restantes) == 1:
+            per_page = 1
+        else:
+            per_page = 2
+
+        imagenes_restantes = draw_images(
             c,
-            data["ubicacion"],
-            per_page=1,
+            imagenes_restantes,
+            per_page=per_page,
             start_y=cursor_y,
         )
-    else:
-        draw_images(
-            c,
-            data["ubicacion"],
-            per_page=2,
-            start_y=cursor_y,
-        )
 
-    # reservar espacio por las imágenes de ubicación
-    if len(data["ubicacion"]) == 1:
-        cursor_y -= 480
-    else:
-        cursor_y -= 520
+        if imagenes_restantes:
+            c.showPage()
+            page_num += 1
+            cursor_y = PAGE_HEIGHT - 100
 
-    # PRUEBA: mantenimiento (todas como 4 por hoja por ahora)
-    current_folder = None
 
     # =========================
     # MANTENIMIENTO
@@ -251,15 +288,14 @@ def main():
                 )
 
                 # reservar espacio después de dibujar
-                if layout_actual == 4:
-                    cursor_y -= 620
-                else:
-                    cursor_y -= 520
+                cursor_y -= altura_layout(layout_actual)
+
 
             buffer_imagenes = []
 
-            page_num = nueva_pagina(c, page_num, project_data)
-            cursor_y = draw_section_title(c, niveles["seccion"])
+            page_num, cursor_y = nueva_pagina_con_titulo(
+                c, page_num, project_data, niveles["seccion"]
+            )
 
             ultimo["seccion"] = niveles["seccion"]
             ultimo["subseccion"] = None
@@ -281,20 +317,19 @@ def main():
                 )
 
                 # reservar espacio después de dibujar
-                if layout_actual == 4:
-                    cursor_y -= 620
-                else:
-                    cursor_y -= 520
+                cursor_y -= altura_layout(layout_actual)
+
 
             buffer_imagenes = []
 
             if cursor_y < 200:
-                page_num = nueva_pagina(c, page_num, project_data)
-                cursor_y = PAGE_HEIGHT - 100
+                page_num, cursor_y = nueva_pagina_con_titulo(
+                    c, page_num, project_data, niveles["seccion"]
+                )
 
-            cursor_y -= 20
+            cursor_y -= 12
             draw_subsection_title(c, niveles["subseccion"], cursor_y)
-            cursor_y -= 30
+            cursor_y -= 16
 
             ultimo["subseccion"] = niveles["subseccion"]
             ultimo["grupo"] = None
@@ -315,16 +350,14 @@ def main():
                 )
 
                 # reservar espacio después de dibujar
-                if layout_actual == 4:
-                    cursor_y -= 620
-                else:
-                    cursor_y -= 520
+                cursor_y -= altura_layout(layout_actual)
+
 
             buffer_imagenes = []
 
-            cursor_y -= 20
+            cursor_y -= 12
             draw_subsection_title(c, niveles["grupo"], cursor_y)
-            cursor_y -= 30
+            cursor_y -= 16
 
             ultimo["grupo"] = niveles["grupo"]
             ultimo["categoria"] = None
@@ -344,16 +377,14 @@ def main():
                 )
 
                 # reservar espacio después de dibujar
-                if layout_actual == 4:
-                    cursor_y -= 620
-                else:
-                    cursor_y -= 520
+                cursor_y -= altura_layout(layout_actual)
+
 
             buffer_imagenes = []
 
-            cursor_y -= 20
+            cursor_y -= 12
             draw_subsection_title(c, niveles["categoria"], cursor_y)
-            cursor_y -= 30
+            cursor_y -= 16
 
             nombre_cat = (niveles["categoria"] or "").lower()
 
@@ -380,10 +411,8 @@ def main():
             start_y=cursor_y,
         )
         # reservar espacio después de dibujar
-        if layout_actual == 4:
-            cursor_y -= 620
-        else:
-            cursor_y -= 520
+        cursor_y -= altura_layout(layout_actual)
+
     buffer_imagenes = []
 
     c.save()
