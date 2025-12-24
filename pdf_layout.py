@@ -168,3 +168,36 @@ def nueva_pagina_con_titulo(canvas, page_num, project_data, titulo):
     cursor_y = draw_section_title(canvas, titulo, cursor_y)
 
     return page_num, cursor_y
+
+def draw_index(canvas, index_items, start_page=1):
+    cursor_y = PAGE_HEIGHT - 120
+
+    canvas.setFont("Helvetica-Bold", 20)
+    canvas.drawString(MARGIN, cursor_y, "Índice")
+    cursor_y -= 40
+
+    canvas.setFont("Helvetica", 11)
+
+    for item in index_items:
+        indent = 0 if item["level"] == 1 else 20
+
+        if cursor_y < 100:
+            canvas.showPage()
+            draw_header_footer(canvas, start_page, item["project_data"])
+            cursor_y = PAGE_HEIGHT - 100
+
+        canvas.drawString(
+            MARGIN + indent,
+            cursor_y,
+            item["title"]
+        )
+
+        canvas.drawRightString(
+            PAGE_WIDTH - MARGIN,
+            cursor_y,
+            str(item["page"] + start_page)
+        )
+
+        cursor_y -= 18
+
+    canvas.showPage()
