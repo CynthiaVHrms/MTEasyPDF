@@ -174,7 +174,7 @@ def build_mantenimiento_tree(imagenes, raiz):
 
 def render_mantenimiento(canvas, page_num, cursor_y, tree, project_data):
     MIN_BOTTOM = 120  # margen seguro abajo (logos + número + aire)
-    TITLE_GAP = 20    # espacio extra después de cada título/subtítulo
+    TITLE_GAP = 2    # espacio extra después de cada título/subtítulo
 
     for seccion, subsecciones in tree.items():
 
@@ -191,6 +191,7 @@ def render_mantenimiento(canvas, page_num, cursor_y, tree, project_data):
                     page_num += 1
                     draw_header_footer(canvas, page_num, project_data)
                     cursor_y = PAGE_HEIGHT - 100
+                    cursor_y = draw_section_title(canvas, seccion, cursor_y)
 
                 cursor_y = draw_subsection_title(canvas, subseccion, cursor_y)  # ✅ usa retorno
                 cursor_y -= TITLE_GAP
@@ -202,6 +203,7 @@ def render_mantenimiento(canvas, page_num, cursor_y, tree, project_data):
                         page_num += 1
                         draw_header_footer(canvas, page_num, project_data)
                         cursor_y = PAGE_HEIGHT - 100
+                        cursor_y = draw_section_title(canvas, seccion, cursor_y)
 
                     cursor_y = draw_subsection_title(canvas, grupo, cursor_y)  # ✅ usa retorno
                     cursor_y -= TITLE_GAP
@@ -214,12 +216,13 @@ def render_mantenimiento(canvas, page_num, cursor_y, tree, project_data):
                             page_num += 1
                             draw_header_footer(canvas, page_num, project_data)
                             cursor_y = PAGE_HEIGHT - 100
+                            cursor_y = draw_section_title(canvas, seccion, cursor_y)
 
                         cursor_y = draw_subsection_title(canvas, categoria, cursor_y)  # ✅ usa retorno
                         cursor_y -= TITLE_GAP
 
                     nombre = (categoria or "").lower()
-                    layout = 2 if ("pantalla" in nombre or "portada" in nombre) else 4
+                    layout = 2 if ("pantalla" in nombre or "pruebas" in nombre) else 4
 
                     # Dibuja bloques de imágenes
                     while imagenes:
@@ -229,6 +232,7 @@ def render_mantenimiento(canvas, page_num, cursor_y, tree, project_data):
                             page_num += 1
                             draw_header_footer(canvas, page_num, project_data)
                             cursor_y = PAGE_HEIGHT - 100
+                            cursor_y = draw_section_title(canvas, seccion, cursor_y)
 
                         imagenes, used_height = draw_images(
                             canvas,
@@ -242,6 +246,7 @@ def render_mantenimiento(canvas, page_num, cursor_y, tree, project_data):
                     page_num += 1
                     draw_header_footer(canvas, page_num, project_data)
                     cursor_y = PAGE_HEIGHT - 100
+                    cursor_y = draw_section_title(canvas, seccion, cursor_y)
 
     return page_num, cursor_y
 

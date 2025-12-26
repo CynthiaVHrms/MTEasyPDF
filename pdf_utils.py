@@ -4,7 +4,6 @@ from reportlab.lib.utils import ImageReader
 from PIL import Image
 
 PAGE_WIDTH, PAGE_HEIGHT = A4
-
 MARGIN = 40
 TEXT_HEIGHT = 14
 TOP_SAFE_MARGIN = PAGE_HEIGHT - 200
@@ -50,11 +49,11 @@ def draw_images(canvas, images, per_page=4, start_y=None):
 
     # Tamaños máximos por celda
     if per_page == 4:
-        max_w, max_h = 220, 165
+        max_w, max_h = 235, 220
     elif per_page == 2:
-        max_w, max_h = 340, 250
+        max_w, max_h = 360, 250
     else:  # per_page == 1
-        max_w, max_h = 420, 360
+        max_w, max_h = 360, 250
 
     images_to_draw = images[:per_page]
     remaining_images = images[per_page:]
@@ -64,7 +63,7 @@ def draw_images(canvas, images, per_page=4, start_y=None):
     rows = (len(images_to_draw) + cols - 1) // cols
 
     # espaciado vertical real por fila (incluye texto)
-    row_gap = max_h + TEXT_HEIGHT + 28  # 28 = padding visual (se ve bien)
+    row_gap = max_h + TEXT_HEIGHT + 48  # 28 = padding visual (se ve bien)
     top_padding = 10
     bottom_padding = 20
 
