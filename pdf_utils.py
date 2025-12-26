@@ -27,6 +27,10 @@ def prepare_image_for_pdf(path, max_width=1400, quality=65):
 
 
 def draw_images(canvas, images, per_page=4, start_y=None):
+    
+    def clean_filename(name):
+        return name.lstrip("0123456789.- _").strip()
+
     """
     Dibuja un bloque (hasta per_page imágenes) y regresa:
       (remaining_images, used_height)
@@ -51,9 +55,9 @@ def draw_images(canvas, images, per_page=4, start_y=None):
     if per_page == 4:
         max_w, max_h = 235, 220
     elif per_page == 2:
-        max_w, max_h = 360, 250
+        max_w, max_h = 400, 250
     else:  # per_page == 1
-        max_w, max_h = 360, 250
+        max_w, max_h = 400, 250
 
     images_to_draw = images[:per_page]
     remaining_images = images[per_page:]
@@ -121,7 +125,9 @@ def draw_images(canvas, images, per_page=4, start_y=None):
         )
 
         # Texto (nombre archivo)
-        filename = img_path.split("\\")[-1].rsplit(".", 1)[0]
+        raw_name = img_path.split("\\")[-1].rsplit(".", 1)[0]
+        filename = clean_filename(raw_name)
+
         canvas.setFillColorRGB(0, 0, 0)
         canvas.setFont("Helvetica", 7)
         canvas.drawCentredString(

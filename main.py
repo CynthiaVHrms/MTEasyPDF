@@ -1,13 +1,17 @@
 import zipfile
 import os
 import shutil
+from PyPDF2 import PdfMerger
 
 from collections import defaultdict
 
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 
-from pdf_utils import draw_images
+from pdf_utils import (
+    draw_images,
+    MARGIN,
+    )
 
 from pdf_layout import (
     draw_cover,
@@ -15,6 +19,8 @@ from pdf_layout import (
     draw_section_title,
     draw_subsection_title,
     nueva_pagina_con_titulo,
+    draw_index,
+    draw_introduccion,
 )
 
 # ============================================================
@@ -41,6 +47,19 @@ project_data = {
 # ============================================================
 # FILE UTILS
 # ============================================================
+class IndexCollector:
+    def __init__(self):
+        self.items = []
+
+    def add(self, title, page, level=1):
+        self.items.append({
+            "title": title,
+            "page": page,
+            "level": level
+        })
+
+    def get_items(self):
+        return self.items
 
 def limpiar_temp():
     if os.path.exists(TEMP_DIR):
@@ -172,7 +191,8 @@ def build_mantenimiento_tree(imagenes, raiz):
     return tree
 
 
-def render_mantenimiento(canvas, page_num, cursor_y, tree, project_data):
+def render_mantenimiento(canvas, page_num, cursor_y, tree, project_data, index=None):
+
     MIN_BOTTOM = 120  # margen seguro abajo (logos + número + aire)
     TITLE_GAP = 2    # espacio extra después de cada título/subtítulo
 
@@ -181,6 +201,8 @@ def render_mantenimiento(canvas, page_num, cursor_y, tree, project_data):
         page_num, cursor_y = nueva_pagina_con_titulo(
             canvas, page_num, project_data, seccion
         )
+        if index:
+            index.add(seccion, page_num, level=1)
         cursor_y -= TITLE_GAP  # ✅ separación real tras título de sección
 
         for subseccion, grupos in subsecciones.items():
@@ -193,7 +215,9 @@ def render_mantenimiento(canvas, page_num, cursor_y, tree, project_data):
                     cursor_y = PAGE_HEIGHT - 100
                     cursor_y = draw_section_title(canvas, seccion, cursor_y)
 
-                cursor_y = draw_subsection_title(canvas, subseccion, cursor_y)  # ✅ usa retorno
+                cursor_y = draw_subsection_title(canvas, subseccion, cursor_y) 
+                if index:
+                    index.add(subseccion, page_num, level=2)
                 cursor_y -= TITLE_GAP
 
             for grupo, categorias in grupos.items():
@@ -205,10 +229,21 @@ def render_mantenimiento(canvas, page_num, cursor_y, tree, project_data):
                         cursor_y = PAGE_HEIGHT - 100
                         cursor_y = draw_section_title(canvas, seccion, cursor_y)
 
-                    cursor_y = draw_subsection_title(canvas, grupo, cursor_y)  # ✅ usa retorno
+                    cursor_y = draw_subsection_title(canvas, grupo, cursor_y) 
+                    if index:
+                        index.add(grupo, page_num, level=3)
                     cursor_y -= TITLE_GAP
 
                 for categoria, imagenes in categorias.items():
+                    imagenes_categoria = []
+                    pdfs_categoria = []
+
+                    for archivo in imagenes:
+                        if archivo.lower().endswith((".jpg", ".jpeg", ".png")):
+                            imagenes_categoria.append(archivo)
+                        elif archivo.lower().endswith(".pdf"):
+                            pdfs_categoria.append(archivo)
+
                     # Si viene título de categoría, asegúrate que quepa antes de dibujarlo
                     if categoria:
                         if cursor_y < (MIN_BOTTOM + 40):
@@ -223,6 +258,7 @@ def render_mantenimiento(canvas, page_num, cursor_y, tree, project_data):
 
                     nombre = (categoria or "").lower()
                     layout = 2 if ("pantalla" in nombre or "pruebas" in nombre) else 4
+                    imagenes = imagenes_categoria
 
                     # Dibuja bloques de imágenes
                     while imagenes:
@@ -247,9 +283,92 @@ def render_mantenimiento(canvas, page_num, cursor_y, tree, project_data):
                     draw_header_footer(canvas, page_num, project_data)
                     cursor_y = PAGE_HEIGHT - 100
                     cursor_y = draw_section_title(canvas, seccion, cursor_y)
+                    
+                    for pdf in pdfs_categoria:
+                        canvas.showPage()
+                        page_num += 1
+                        draw_header_footer(canvas, page_num, project_data)
+
+                        cursor_y = PAGE_HEIGHT - 120
+                        cursor_y = draw_section_title(canvas, "Documentación", cursor_y)
+
+                        canvas.setFont("Helvetica", 11)
+                        canvas.drawString(
+                            MARGIN,
+                            cursor_y,
+                            f"Documento anexo: {os.path.basename(pdf)}"
+                        )
+
 
     return page_num, cursor_y
 
+def build_pdf(
+    filename,
+    with_index,
+    data,
+    mantenimiento_tree,
+    index_items=None,
+    index=None
+):
+
+
+    c = canvas.Canvas(filename, pagesize=A4, pageCompression=1)
+
+    page_num = 0
+    cursor_y = PAGE_HEIGHT - 100
+
+    # -------- PORTADA --------
+    draw_cover(
+        c,
+        {
+            "titulo": project_data["titulo"],
+            "info_extra": project_data["info_extra"],
+            "imagen_portada": project_data["imagen_portada"],
+        },
+        project_data,
+    )
+    page_num += 1
+    
+    # INTRODUCCIÓN (página 1)
+    draw_header_footer(c, page_num, project_data)
+    draw_introduccion(c, project_data["introduccion"])
+    page_num += 1
+
+    # -------- ÍNDICE (solo si ya existe) --------
+    if with_index and index_items:
+        draw_header_footer(c, page_num, project_data)
+        draw_index(c, index_items, start_page=page_num)
+        page_num += 1
+
+    # -------- UBICACIÓN --------
+    imagenes_restantes = data["ubicacion"][:]
+
+    while imagenes_restantes:
+        draw_header_footer(c, page_num, project_data)
+
+        cursor_y = draw_section_title(c, "Ubicación")
+        cursor_y -= 20
+
+        imagenes_restantes, used_height = draw_images(
+            c,
+            imagenes_restantes,
+            per_page=2,
+            start_y=cursor_y,
+        )
+
+        cursor_y -= used_height
+
+        if imagenes_restantes:
+            c.showPage()
+            page_num += 1
+            cursor_y = PAGE_HEIGHT - 100
+
+    # -------- MANTENIMIENTO --------
+    page_num, cursor_y = render_mantenimiento(
+        c, page_num, cursor_y, mantenimiento_tree, project_data
+    )
+
+    c.save()
 
 # ============================================================
 # MAIN
@@ -257,11 +376,127 @@ def render_mantenimiento(canvas, page_num, cursor_y, tree, project_data):
 
 def main():
 
+    # ============================================================
+    # PREPARACIÓN
+    # ============================================================
+
     limpiar_temp()
     extraer_zip(ZIP_PATH)
 
     raiz = obtener_carpeta_raiz(TEMP_DIR)
     data = clasificar_archivos(raiz)
+
+    mantenimiento_tree = build_mantenimiento_tree(
+        data["mantenimiento"]["imagenes"], raiz
+    )
+
+    # ============================================================
+    # PRIMERA PASADA (solo recolectar índice)
+    # ============================================================
+
+    index = IndexCollector()
+
+    c = canvas.Canvas("output/_tmp.pdf", pagesize=A4, pageCompression=1)
+
+    page_num = 0
+    cursor_y = PAGE_HEIGHT - 100
+
+    # ---------------- PORTADA ----------------
+    draw_cover(
+        c,
+        {
+            "titulo": project_data["titulo"],
+            "info_extra": project_data["info_extra"],
+            "imagen_portada": project_data["imagen_portada"],
+        },
+        project_data,
+    )
+    page_num += 1
+    
+    # INTRODUCCIÓN (página 1)
+    draw_header_footer(c, page_num, project_data)
+    draw_introduccion(c, project_data["introduccion"])
+    page_num += 1
+    c.showPage()
+
+    # ---------------- UBICACIÓN ----------------
+    ubicacion_indexed = False
+    imagenes_restantes = data["ubicacion"][:]
+
+    while imagenes_restantes:
+        draw_header_footer(c, page_num, project_data)
+
+        cursor_y = draw_section_title(c, "Ubicación")
+        
+        if not ubicacion_indexed:
+            index.add("Ubicación", page_num, level=1)
+            ubicacion_indexed = True
+            
+        cursor_y -= 20
+
+        per_page = 1 if len(imagenes_restantes) == 1 else 2
+
+        imagenes_restantes, used_height = draw_images(
+            c,
+            imagenes_restantes,
+            per_page=per_page,
+            start_y=cursor_y,
+        )
+
+        cursor_y -= used_height
+
+        if imagenes_restantes:
+            c.showPage()
+            page_num += 1
+            cursor_y = PAGE_HEIGHT - 100
+            
+            
+    # =========================
+    # INVENTARIO
+    # =========================
+    page_num, cursor_y = nueva_pagina_con_titulo(
+        c, page_num, project_data, "Inventario"
+    )
+
+    for pdf in data["inventario"]:
+        c.showPage()
+        page_num += 1
+        draw_header_footer(c, page_num, project_data)
+        cursor_y = PAGE_HEIGHT - 120
+        c.drawString(MARGIN, cursor_y, os.path.basename(pdf))
+
+
+    # ---------------- MANTENIMIENTO ----------------
+    page_num, cursor_y = render_mantenimiento(
+        c,
+        page_num,
+        cursor_y,
+        mantenimiento_tree,
+        project_data,
+        index=index,   # 👈 importante
+    )
+    
+    # =========================
+    # ANEXOS
+    # =========================
+    page_num, cursor_y = nueva_pagina_con_titulo(
+        c, page_num, project_data, "Anexos"
+    )
+    
+    for pdf in data["anexos"]:
+        c.showPage()
+        page_num += 1
+        draw_header_footer(c, page_num, project_data)
+        cursor_y = PAGE_HEIGHT - 120
+        c.drawString(MARGIN, cursor_y, os.path.basename(pdf))
+
+    c.save()
+
+    index_items = index.get_items()
+
+    # ============================================================
+    # SEGUNDA PASADA (PDF FINAL + ÍNDICE)
+    # ============================================================
 
     c = canvas.Canvas("output/mvp_imagenes.pdf", pagesize=A4, pageCompression=1)
 
@@ -278,18 +513,28 @@ def main():
         },
         project_data,
     )
-
+    page_num += 1
+    
+    # INTRODUCCIÓN (página 1)
     draw_header_footer(c, page_num, project_data)
+    draw_introduccion(c, project_data["introduccion"])
+    page_num += 1
+    c.showPage()
 
-   # ---------------- UBICACIÓN ----------------
-    page_num = 1
+    # ---------------- ÍNDICE ----------------
+    draw_header_footer(c, page_num, project_data)
+    draw_index(c, index_items, start_page=page_num + 1)
+    page_num += 1
+
+    # ---------------- UBICACIÓN ----------------
     imagenes_restantes = data["ubicacion"][:]
 
     while imagenes_restantes:
         draw_header_footer(c, page_num, project_data)
 
         cursor_y = draw_section_title(c, "Ubicación")
-        cursor_y -= 20  
+        cursor_y -= 20
+
         per_page = 1 if len(imagenes_restantes) == 1 else 2
 
         imagenes_restantes, used_height = draw_images(
@@ -305,19 +550,62 @@ def main():
             c.showPage()
             page_num += 1
             cursor_y = PAGE_HEIGHT - 100
+            
+            
+    # =========================
+    # INVENTARIO
+    # =========================
+    page_num, cursor_y = nueva_pagina_con_titulo(
+        c, page_num, project_data, "Inventario"
+    )
+
+    for pdf in data["inventario"]:
+        c.showPage()
+        page_num += 1
+        draw_header_footer(c, page_num, project_data)
+        cursor_y = PAGE_HEIGHT - 120
+        c.drawString(MARGIN, cursor_y, os.path.basename(pdf))
+
 
     # ---------------- MANTENIMIENTO ----------------
-    mantenimiento_tree = build_mantenimiento_tree(
-        data["mantenimiento"]["imagenes"], raiz
+    page_num, cursor_y = render_mantenimiento(
+        c,
+        page_num,
+        cursor_y,
+        mantenimiento_tree,
+        project_data,
+        index=None,  # ya no se recolecta
+    )
+    
+    # =========================
+    # ANEXOS
+    # =========================
+    page_num, cursor_y = nueva_pagina_con_titulo(
+        c, page_num, project_data, "Anexos"
     )
 
-    page_num, cursor_y = render_mantenimiento(
-        c, page_num, cursor_y, mantenimiento_tree, project_data
-    )
+    for pdf in data["anexos"]:
+        c.showPage()
+        page_num += 1
+        draw_header_footer(c, page_num, project_data)
+        cursor_y = PAGE_HEIGHT - 120
+        c.drawString(MARGIN, cursor_y, os.path.basename(pdf))
+
 
     c.save()
-    imprimir_resumen(data)
+    
 
+    merger = PdfMerger()
+    merger.append("output/mvp_imagenes.pdf")
+
+    for pdf in data["inventario"]:
+        merger.append(pdf)
+
+    merger.write("output/final.pdf")
+    merger.close()
+
+
+    imprimir_resumen(data)
 
 if __name__ == "__main__":
     main()
