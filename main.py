@@ -2,16 +2,14 @@ import zipfile
 import os
 import shutil
 from PyPDF2 import PdfMerger
-
 from collections import defaultdict
-
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 
 from pdf_utils import (
     draw_images,
     MARGIN,
-    )
+)
 
 from pdf_layout import (
     draw_cover,
@@ -21,6 +19,17 @@ from pdf_layout import (
     nueva_pagina_con_titulo,
     draw_index,
     draw_introduccion,
+)
+
+from file_engine import (
+    limpiar_temp,
+    extraer_zip,
+    obtener_carpeta_raiz,
+    clasificar_archivos,
+    build_mantenimiento_tree,
+    agrupar_pdfs_por_categoria,
+    limpiar_nombre,
+    obtener_niveles,
 )
 
 # ============================================================
@@ -44,6 +53,7 @@ project_data = {
     "logo_inf_der": os.path.join(BASE_DIR, "input", "logo1.png"),
 }
 
+
 # ============================================================
 # FILE UTILS
 # ============================================================
@@ -52,85 +62,15 @@ class IndexCollector:
         self.items = []
 
     def add(self, title, page, level=1):
-        self.items.append({
-            "title": title,
-            "page": page,
-            "level": level
-        })
+        self.items.append({"title": title, "page": page, "level": level})
 
     def get_items(self):
         return self.items
-
-def limpiar_temp():
-    if os.path.exists(TEMP_DIR):
-        shutil.rmtree(TEMP_DIR)
-    os.makedirs(TEMP_DIR)
-
-
-def extraer_zip(zip_path):
-    with zipfile.ZipFile(zip_path, "r") as zip_ref:
-        zip_ref.extractall(TEMP_DIR)
-
-
-def obtener_carpeta_raiz(base_path):
-    carpetas = [
-        os.path.join(base_path, c)
-        for c in os.listdir(base_path)
-        if os.path.isdir(os.path.join(base_path, c))
-    ]
-    return carpetas[0] if len(carpetas) == 1 else base_path
 
 
 # ============================================================
 # DATA CLASIFICATION
 # ============================================================
-
-def clasificar_archivos(base_path):
-    resultado = {
-        "ubicacion": [],
-        "inventario": [],
-        "mantenimiento": {"imagenes": [], "pdfs": []},
-        "anexos": [],
-    }
-
-    for carpeta in os.listdir(base_path):
-        ruta_carpeta = os.path.join(base_path, carpeta)
-        if not os.path.isdir(ruta_carpeta):
-            continue
-
-        nombre = carpeta.lower()
-
-        if nombre.startswith("01"):
-            continue
-
-        if nombre.startswith("02"):
-            for root, _, files in os.walk(ruta_carpeta):
-                for f in sorted(files):
-                    if f.lower().endswith((".jpg", ".jpeg", ".png")):
-                        resultado["ubicacion"].append(os.path.join(root, f))
-
-        elif nombre.startswith("03"):
-            for root, _, files in os.walk(ruta_carpeta):
-                for f in files:
-                    if f.lower().endswith((".xls", ".xlsx", ".pdf")):
-                        resultado["inventario"].append(os.path.join(root, f))
-
-        elif "mantenimiento" in nombre or "implementacion" in nombre:
-            for root, _, files in os.walk(ruta_carpeta):
-                for f in sorted(files):
-                    ruta = os.path.join(root, f)
-                    if f.lower().endswith((".jpg", ".jpeg", ".png")):
-                        resultado["mantenimiento"]["imagenes"].append(ruta)
-                    elif f.lower().endswith(".pdf"):
-                        resultado["mantenimiento"]["pdfs"].append(ruta)
-
-        elif "anexos" in nombre:
-            for root, _, files in os.walk(ruta_carpeta):
-                for f in sorted(files):
-                    if f.lower().endswith(".pdf"):
-                        resultado["anexos"].append(os.path.join(root, f))
-
-    return resultado
 
 
 def imprimir_resumen(data):
@@ -142,59 +82,12 @@ def imprimir_resumen(data):
     print("📎 Anexos:", len(data["anexos"]), "pdf(s)")
 
 
-# ============================================================
-# PATH PARSING
-# ============================================================
-
-def limpiar_nombre(nombre):
-    return (
-        nombre.replace("_", " ")
-        .replace("-", " ")
-        .replace(".", "")
-        .strip()
-    )
-
-
-def obtener_niveles(path, raiz):
-    rel = os.path.relpath(path, raiz)
-    partes = rel.split(os.sep)
-
-    return {
-        "seccion": limpiar_nombre(partes[0]) if len(partes) > 0 else None,
-        "subseccion": limpiar_nombre(partes[1]) if len(partes) > 1 else None,
-        "grupo": limpiar_nombre(partes[2]) if len(partes) > 2 else None,
-        "categoria": limpiar_nombre(partes[-2]) if len(partes) >= 2 else None,
-    }
-
-
-# ============================================================
-# MANTENIMIENTO TREE
-# ============================================================
-
-def build_mantenimiento_tree(imagenes, raiz):
-    tree = defaultdict(
-        lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
-    )
-
-    for img in imagenes:
-        niveles = obtener_niveles(img, raiz)
-        tree[
-            niveles["seccion"]
-        ][
-            niveles["subseccion"]
-        ][
-            niveles["grupo"]
-        ][
-            niveles["categoria"]
-        ].append(img)
-
-    return tree
-
-
-def render_mantenimiento(canvas, page_num, cursor_y, tree, project_data, index=None):
+def render_mantenimiento(
+    canvas, page_num, cursor_y, tree, pdf_tree, project_data, index=None
+):
 
     MIN_BOTTOM = 120  # margen seguro abajo (logos + número + aire)
-    TITLE_GAP = 2    # espacio extra después de cada título/subtítulo
+    TITLE_GAP = 2  # espacio extra después de cada título/subtítulo
 
     for seccion, subsecciones in tree.items():
 
@@ -215,7 +108,7 @@ def render_mantenimiento(canvas, page_num, cursor_y, tree, project_data, index=N
                     cursor_y = PAGE_HEIGHT - 100
                     cursor_y = draw_section_title(canvas, seccion, cursor_y)
 
-                cursor_y = draw_subsection_title(canvas, subseccion, cursor_y) 
+                cursor_y = draw_subsection_title(canvas, subseccion, cursor_y)
                 if index:
                     index.add(subseccion, page_num, level=2)
                 cursor_y -= TITLE_GAP
@@ -229,7 +122,7 @@ def render_mantenimiento(canvas, page_num, cursor_y, tree, project_data, index=N
                         cursor_y = PAGE_HEIGHT - 100
                         cursor_y = draw_section_title(canvas, seccion, cursor_y)
 
-                    cursor_y = draw_subsection_title(canvas, grupo, cursor_y) 
+                    cursor_y = draw_subsection_title(canvas, grupo, cursor_y)
                     if index:
                         index.add(grupo, page_num, level=3)
                     cursor_y -= TITLE_GAP
@@ -253,7 +146,9 @@ def render_mantenimiento(canvas, page_num, cursor_y, tree, project_data, index=N
                             cursor_y = PAGE_HEIGHT - 100
                             cursor_y = draw_section_title(canvas, seccion, cursor_y)
 
-                        cursor_y = draw_subsection_title(canvas, categoria, cursor_y)  # ✅ usa retorno
+                        cursor_y = draw_subsection_title(
+                            canvas, categoria, cursor_y
+                        )  # ✅ usa retorno
                         cursor_y -= TITLE_GAP
 
                     nombre = (categoria or "").lower()
@@ -283,7 +178,7 @@ def render_mantenimiento(canvas, page_num, cursor_y, tree, project_data, index=N
                     draw_header_footer(canvas, page_num, project_data)
                     cursor_y = PAGE_HEIGHT - 100
                     cursor_y = draw_section_title(canvas, seccion, cursor_y)
-                    
+
                     for pdf in pdfs_categoria:
                         canvas.showPage()
                         page_num += 1
@@ -296,21 +191,33 @@ def render_mantenimiento(canvas, page_num, cursor_y, tree, project_data, index=N
                         canvas.drawString(
                             MARGIN,
                             cursor_y,
-                            f"Documento anexo: {os.path.basename(pdf)}"
+                            f"Documento anexo: {os.path.basename(pdf)}",
                         )
 
+                    pdfs_categoria = (
+                        pdf_tree.get(seccion, {})
+                        .get(subseccion, {})
+                        .get(grupo, {})
+                        .get(categoria, [])
+                    )
+
+                    for pdf in pdfs_categoria:
+                        canvas.showPage()
+                        page_num += 1
+                        draw_header_footer(canvas, page_num, project_data)
+
+                        cursor_y = PAGE_HEIGHT - 120
+                        cursor_y = draw_section_title(canvas, "Documentación", cursor_y)
+
+                        canvas.setFont("Helvetica", 11)
+                        canvas.drawString(MARGIN, cursor_y, os.path.basename(pdf))
 
     return page_num, cursor_y
 
-def build_pdf(
-    filename,
-    with_index,
-    data,
-    mantenimiento_tree,
-    index_items=None,
-    index=None
-):
 
+def build_pdf(
+    filename, with_index, data, mantenimiento_tree, index_items=None, index=None
+):
 
     c = canvas.Canvas(filename, pagesize=A4, pageCompression=1)
 
@@ -328,7 +235,7 @@ def build_pdf(
         project_data,
     )
     page_num += 1
-    
+
     # INTRODUCCIÓN (página 1)
     draw_header_footer(c, page_num, project_data)
     draw_introduccion(c, project_data["introduccion"])
@@ -370,9 +277,11 @@ def build_pdf(
 
     c.save()
 
+
 # ============================================================
 # MAIN
 # ============================================================
+
 
 def main():
 
@@ -380,14 +289,18 @@ def main():
     # PREPARACIÓN
     # ============================================================
 
-    limpiar_temp()
-    extraer_zip(ZIP_PATH)
+    limpiar_temp(TEMP_DIR)
+    extraer_zip(ZIP_PATH, TEMP_DIR)
 
     raiz = obtener_carpeta_raiz(TEMP_DIR)
     data = clasificar_archivos(raiz)
 
     mantenimiento_tree = build_mantenimiento_tree(
         data["mantenimiento"]["imagenes"], raiz
+    )
+
+    pdfs_mantenimiento_tree = agrupar_pdfs_por_categoria(
+        data["mantenimiento"]["pdfs"], raiz
     )
 
     # ============================================================
@@ -412,7 +325,7 @@ def main():
         project_data,
     )
     page_num += 1
-    
+
     # INTRODUCCIÓN (página 1)
     draw_header_footer(c, page_num, project_data)
     draw_introduccion(c, project_data["introduccion"])
@@ -427,11 +340,11 @@ def main():
         draw_header_footer(c, page_num, project_data)
 
         cursor_y = draw_section_title(c, "Ubicación")
-        
+
         if not ubicacion_indexed:
             index.add("Ubicación", page_num, level=1)
             ubicacion_indexed = True
-            
+
         cursor_y -= 20
 
         per_page = 1 if len(imagenes_restantes) == 1 else 2
@@ -449,8 +362,7 @@ def main():
             c.showPage()
             page_num += 1
             cursor_y = PAGE_HEIGHT - 100
-            
-            
+
     # =========================
     # INVENTARIO
     # =========================
@@ -465,24 +377,22 @@ def main():
         cursor_y = PAGE_HEIGHT - 120
         c.drawString(MARGIN, cursor_y, os.path.basename(pdf))
 
-
     # ---------------- MANTENIMIENTO ----------------
     page_num, cursor_y = render_mantenimiento(
         c,
         page_num,
         cursor_y,
         mantenimiento_tree,
+        pdfs_mantenimiento_tree,
         project_data,
-        index=index,   # 👈 importante
+        index=index,  # 👈 importante
     )
-    
+
     # =========================
     # ANEXOS
     # =========================
-    page_num, cursor_y = nueva_pagina_con_titulo(
-        c, page_num, project_data, "Anexos"
-    )
-    
+    page_num, cursor_y = nueva_pagina_con_titulo(c, page_num, project_data, "Anexos")
+
     for pdf in data["anexos"]:
         c.showPage()
         page_num += 1
@@ -514,7 +424,7 @@ def main():
         project_data,
     )
     page_num += 1
-    
+
     # INTRODUCCIÓN (página 1)
     draw_header_footer(c, page_num, project_data)
     draw_introduccion(c, project_data["introduccion"])
@@ -550,8 +460,7 @@ def main():
             c.showPage()
             page_num += 1
             cursor_y = PAGE_HEIGHT - 100
-            
-            
+
     # =========================
     # INVENTARIO
     # =========================
@@ -566,23 +475,21 @@ def main():
         cursor_y = PAGE_HEIGHT - 120
         c.drawString(MARGIN, cursor_y, os.path.basename(pdf))
 
-
     # ---------------- MANTENIMIENTO ----------------
     page_num, cursor_y = render_mantenimiento(
         c,
         page_num,
         cursor_y,
         mantenimiento_tree,
+        pdfs_mantenimiento_tree,
         project_data,
         index=None,  # ya no se recolecta
     )
-    
+
     # =========================
     # ANEXOS
     # =========================
-    page_num, cursor_y = nueva_pagina_con_titulo(
-        c, page_num, project_data, "Anexos"
-    )
+    page_num, cursor_y = nueva_pagina_con_titulo(c, page_num, project_data, "Anexos")
 
     for pdf in data["anexos"]:
         c.showPage()
@@ -591,9 +498,7 @@ def main():
         cursor_y = PAGE_HEIGHT - 120
         c.drawString(MARGIN, cursor_y, os.path.basename(pdf))
 
-
     c.save()
-    
 
     merger = PdfMerger()
     merger.append("output/mvp_imagenes.pdf")
@@ -604,8 +509,8 @@ def main():
     merger.write("output/final.pdf")
     merger.close()
 
-
     imprimir_resumen(data)
+
 
 if __name__ == "__main__":
     main()
