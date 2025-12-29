@@ -179,20 +179,20 @@ def render_mantenimiento(
                     cursor_y = PAGE_HEIGHT - 100
                     cursor_y = draw_section_title(canvas, seccion, cursor_y)
 
-                    for pdf in pdfs_categoria:
-                        canvas.showPage()
-                        page_num += 1
-                        draw_header_footer(canvas, page_num, project_data)
+                    # for pdf in pdfs_categoria:
+                    #     canvas.showPage()
+                    #     page_num += 1
+                    #     draw_header_footer(canvas, page_num, project_data)
 
-                        cursor_y = PAGE_HEIGHT - 120
-                        cursor_y = draw_section_title(canvas, "Documentación", cursor_y)
+                    #     cursor_y = PAGE_HEIGHT - 120
+                    #     cursor_y = draw_section_title(canvas, "Documentación", cursor_y)
 
-                        canvas.setFont("Helvetica", 11)
-                        canvas.drawString(
-                            MARGIN,
-                            cursor_y,
-                            f"Documento anexo: {os.path.basename(pdf)}",
-                        )
+                    #     canvas.setFont("Helvetica", 11)
+                    #     canvas.drawString(
+                    #         MARGIN,
+                    #         cursor_y,
+                    #         f"Documento anexo: {os.path.basename(pdf)}",
+                    #     )
 
                     pdfs_categoria = (
                         pdf_tree.get(seccion, {})
@@ -291,6 +291,7 @@ def main():
 
     limpiar_temp(TEMP_DIR)
     extraer_zip(ZIP_PATH, TEMP_DIR)
+    pdf_insertions = []
 
     raiz = obtener_carpeta_raiz(TEMP_DIR)
     data = clasificar_archivos(raiz)
