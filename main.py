@@ -83,7 +83,7 @@ def imprimir_resumen(data):
 
 
 def render_mantenimiento(
-    canvas, page_num, cursor_y, tree, pdf_tree, project_data, index=None
+    canvas, page_num, cursor_y, tree, pdf_tree, project_data, index=None, insert_tasks=None
 ):
 
     MIN_BOTTOM = 120  # margen seguro abajo (logos + número + aire)
@@ -179,20 +179,22 @@ def render_mantenimiento(
                     cursor_y = PAGE_HEIGHT - 100
                     cursor_y = draw_section_title(canvas, seccion, cursor_y)
 
-                    for pdf in pdfs_categoria:
+                    pdf_de_esta_cat = pdf_tree.get(seccion, {}).get(subseccion, {}).get(grupo, {}).get(categoria, [])
+            
+                    for pdf in pdf_de_esta_cat:
                         canvas.showPage()
                         page_num += 1
                         draw_header_footer(canvas, page_num, project_data)
 
-                        cursor_y = PAGE_HEIGHT - 120
-                        cursor_y = draw_section_title(canvas, "Documentación", cursor_y)
+                        # Registramos la tarea de inserción si la lista existe
+                        if insert_tasks is not None:
+                            insert_tasks.append((page_num, pdf))
 
+                        # Dibujamos la carátula/marcador
+                        cursor_y = PAGE_HEIGHT - 120
+                        cursor_y = draw_section_title(canvas, "Documentación Anexa", cursor_y)
                         canvas.setFont("Helvetica", 11)
-                        canvas.drawString(
-                            MARGIN,
-                            cursor_y,
-                            f"Documento anexo: {os.path.basename(pdf)}",
-                        )
+                        canvas.drawString(MARGIN, cursor_y, f"Archivo: {os.path.basename(pdf)}")
 
                     pdfs_categoria = (
                         pdf_tree.get(seccion, {})
@@ -302,6 +304,8 @@ def main():
     pdfs_mantenimiento_tree = agrupar_pdfs_por_categoria(
         data["mantenimiento"]["pdfs"], raiz
     )
+    
+    insert_tasks = []
 
     # ============================================================
     # PRIMERA PASADA (solo recolectar índice)
@@ -366,16 +370,17 @@ def main():
     # =========================
     # INVENTARIO
     # =========================
-    page_num, cursor_y = nueva_pagina_con_titulo(
-        c, page_num, project_data, "Inventario"
-    )
+    if index:
+        index.add("Inventario", page_num + 1, level=1)
 
     for pdf in data["inventario"]:
-        c.showPage()
+        c.showPage() # Cada PDF real empezará en su propia página
         page_num += 1
         draw_header_footer(c, page_num, project_data)
-        cursor_y = PAGE_HEIGHT - 120
-        c.drawString(MARGIN, cursor_y, os.path.basename(pdf))
+        cursor_y = PAGE_HEIGHT - 100
+        # Dibujamos un marcador visual para saber qué PDF va aquí
+        c.setFont("Helvetica-Bold", 14)
+        c.drawString(MARGIN, cursor_y, f"Documento: {os.path.basename(pdf)}")
 
     # ---------------- MANTENIMIENTO ----------------
     page_num, cursor_y = render_mantenimiento(
@@ -386,19 +391,22 @@ def main():
         pdfs_mantenimiento_tree,
         project_data,
         index=index,  # 👈 importante
+        insert_tasks=insert_tasks,
     )
 
     # =========================
     # ANEXOS
     # =========================
-    page_num, cursor_y = nueva_pagina_con_titulo(c, page_num, project_data, "Anexos")
+    if index:
+        index.add("Anexos", page_num + 1, level=1)
 
     for pdf in data["anexos"]:
         c.showPage()
         page_num += 1
         draw_header_footer(c, page_num, project_data)
-        cursor_y = PAGE_HEIGHT - 120
-        c.drawString(MARGIN, cursor_y, os.path.basename(pdf))
+        cursor_y = PAGE_HEIGHT - 100
+        c.setFont("Helvetica-Bold", 14)
+        c.drawString(MARGIN, cursor_y, f"Anexo: {os.path.basename(pdf)}")
 
     c.save()
 
@@ -464,16 +472,20 @@ def main():
     # =========================
     # INVENTARIO
     # =========================
-    page_num, cursor_y = nueva_pagina_con_titulo(
-        c, page_num, project_data, "Inventario"
-    )
+    if index:
+        index.add("Inventario", page_num + 1, level=1)
 
     for pdf in data["inventario"]:
-        c.showPage()
+        c.showPage() # Cada PDF real empezará en su propia página
         page_num += 1
         draw_header_footer(c, page_num, project_data)
-        cursor_y = PAGE_HEIGHT - 120
-        c.drawString(MARGIN, cursor_y, os.path.basename(pdf))
+        
+        insert_tasks.append((page_num, pdf))
+        
+        cursor_y = PAGE_HEIGHT - 100
+        # Dibujamos un marcador visual para saber qué PDF va aquí
+        c.setFont("Helvetica-Bold", 14)
+        c.drawString(MARGIN, cursor_y, f"Documento: {os.path.basename(pdf)}")
 
     # ---------------- MANTENIMIENTO ----------------
     page_num, cursor_y = render_mantenimiento(
@@ -484,33 +496,43 @@ def main():
         pdfs_mantenimiento_tree,
         project_data,
         index=None,  # ya no se recolecta
+        insert_tasks=insert_tasks,
     )
 
     # =========================
     # ANEXOS
     # =========================
-    page_num, cursor_y = nueva_pagina_con_titulo(c, page_num, project_data, "Anexos")
-
+    if index:
+        index.add("Anexos", page_num + 1, level=1)
+    
     for pdf in data["anexos"]:
         c.showPage()
         page_num += 1
         draw_header_footer(c, page_num, project_data)
-        cursor_y = PAGE_HEIGHT - 120
-        c.drawString(MARGIN, cursor_y, os.path.basename(pdf))
+        
+        insert_tasks.append((page_num, pdf))
+        
+        cursor_y = PAGE_HEIGHT - 100
+        c.setFont("Helvetica-Bold", 14)
+        c.drawString(MARGIN, cursor_y, f"Anexo: {os.path.basename(pdf)}")
 
-    c.save()
+    c.save() # Guarda el PDF con las hojas de marcador
 
+    print("Insertando archivos PDF en sus posiciones correspondientes...")
     merger = PdfMerger()
     merger.append("output/mvp_imagenes.pdf")
 
-    for pdf in data["inventario"]:
-        merger.append(pdf)
+    # Insertamos los PDFs de atrás hacia adelante para no romper los índices de página
+    # al ir añadiendo hojas nuevas.
+    for p_num, pdf_path in sorted(insert_tasks, key=lambda x: x[0], reverse=True):
+        if os.path.exists(pdf_path):
+            # insert(página_donde_va, archivo)
+            # Usamos p_num porque merger.append ya puso la portada y todo lo demás
+            merger.merge(p_num, pdf_path)
 
-    merger.write("output/final.pdf")
+    output_path = "output/Reporte_Final_Completo.pdf"
+    merger.write(output_path)
     merger.close()
-
-    imprimir_resumen(data)
-
 
 if __name__ == "__main__":
     main()
