@@ -1,7 +1,7 @@
 import zipfile
 import os
 import shutil
-from PyPDF2 import PdfMerger
+from PyPDF2 import PdfMerger, PdfReader, PdfWriter
 from collections import defaultdict
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
@@ -126,6 +126,8 @@ def render_mantenimiento(
                     if index:
                         index.add(grupo, page_num, level=3)
                     cursor_y -= TITLE_GAP
+                
+                contenido_dibujado = False
 
                 for categoria, imagenes in categorias.items():
                     imagenes_categoria = []
@@ -173,28 +175,35 @@ def render_mantenimiento(
                         )
 
                         cursor_y -= used_height
-                    canvas.showPage()
-                    page_num += 1
-                    draw_header_footer(canvas, page_num, project_data)
-                    cursor_y = PAGE_HEIGHT - 100
-                    cursor_y = draw_section_title(canvas, seccion, cursor_y)
+                        contenido_dibujado = True
+                        
+                    if contenido_dibujado:
+                        canvas.showPage()
+                        page_num += 1
+                        draw_header_footer(canvas, page_num, project_data)
+                        cursor_y = PAGE_HEIGHT - 100
+                        cursor_y = draw_section_title(canvas, seccion, cursor_y)
 
                     pdf_de_esta_cat = pdf_tree.get(seccion, {}).get(subseccion, {}).get(grupo, {}).get(categoria, [])
             
                     for pdf in pdf_de_esta_cat:
+                        # Dentro de render_mantenimiento en main.py:
                         canvas.showPage()
-                        page_num += 1
-                        draw_header_footer(canvas, page_num, project_data)
+                        actual_p = canvas.getPageNumber() # Obtener página real del canvas
+                        draw_header_footer(canvas, actual_p, project_data)
 
-                        # Registramos la tarea de inserción si la lista existe
                         if insert_tasks is not None:
-                            insert_tasks.append((page_num, pdf))
+                            # Usamos la página real entregada por ReportLab
+                            insert_tasks.append((actual_p, pdf)) 
+
+                        page_num = actual_p # Sincronizar contador
 
                         # Dibujamos la carátula/marcador
                         cursor_y = PAGE_HEIGHT - 120
                         cursor_y = draw_section_title(canvas, "Documentación Anexa", cursor_y)
                         canvas.setFont("Helvetica", 11)
                         canvas.drawString(MARGIN, cursor_y, f"Archivo: {os.path.basename(pdf)}")
+                        contenido_dibujado = True
 
                     pdfs_categoria = (
                         pdf_tree.get(seccion, {})
@@ -246,7 +255,7 @@ def build_pdf(
     # -------- ÍNDICE (solo si ya existe) --------
     if with_index and index_items:
         draw_header_footer(c, page_num, project_data)
-        draw_index(c, index_items, start_page=page_num)
+        draw_index(c, index_items, project_data, start_page=page_num + 1)
         page_num += 1
 
     # -------- UBICACIÓN --------
@@ -370,17 +379,19 @@ def main():
     # =========================
     # INVENTARIO
     # =========================
+    # === EN LA PRIMERA PASADA (alrededor de la línea 360) ===
     if index:
         index.add("Inventario", page_num + 1, level=1)
 
     for pdf in data["inventario"]:
-        c.showPage() # Cada PDF real empezará en su propia página
+        c.showPage()
         page_num += 1
-        draw_header_footer(c, page_num, project_data)
-        cursor_y = PAGE_HEIGHT - 100
-        # Dibujamos un marcador visual para saber qué PDF va aquí
-        c.setFont("Helvetica-Bold", 14)
-        c.drawString(MARGIN, cursor_y, f"Documento: {os.path.basename(pdf)}")
+        # Simulamos el desplazamiento: si el PDF tiene 5 páginas, 
+        # sumamos esas 4 extra al contador para que el índice sepa dónde estará lo siguiente.
+        if os.path.exists(pdf):
+            reader_temp = PdfReader(pdf)
+            paginas_extras = len(reader_temp.pages) - 1
+            page_num += paginas_extras
 
     # ---------------- MANTENIMIENTO ----------------
     page_num, cursor_y = render_mantenimiento(
@@ -441,7 +452,7 @@ def main():
 
     # ---------------- ÍNDICE ----------------
     draw_header_footer(c, page_num, project_data)
-    draw_index(c, index_items, start_page=page_num + 1)
+    draw_index(c, index_items, project_data, start_page=page_num + 1)
     page_num += 1
 
     # ---------------- UBICACIÓN ----------------
@@ -470,22 +481,27 @@ def main():
             cursor_y = PAGE_HEIGHT - 100
 
     # =========================
-    # INVENTARIO
+    # INVENTARIO (Segunda Pasada)
     # =========================
-    if index:
-        index.add("Inventario", page_num + 1, level=1)
+    if data["inventario"]:
+        for pdf in data["inventario"]:
+            c.showPage() 
+            # IMPORTANTE: No calcules el número sumando. 
+            # Pregúntale al canvas su número de página real actual:
+            pagina_fisica_actual = c.getPageNumber() 
+            
+            draw_header_footer(c, pagina_fisica_actual, project_data)
 
-    for pdf in data["inventario"]:
-        c.showPage() # Cada PDF real empezará en su propia página
-        page_num += 1
-        draw_header_footer(c, page_num, project_data)
-        
-        insert_tasks.append((page_num, pdf))
-        
-        cursor_y = PAGE_HEIGHT - 100
-        # Dibujamos un marcador visual para saber qué PDF va aquí
-        c.setFont("Helvetica-Bold", 14)
-        c.drawString(MARGIN, cursor_y, f"Documento: {os.path.basename(pdf)}")
+            # REGISTRAMOS LA PÁGINA REAL
+            # Eliminamos el "+ 1" que tenías antes, ya que getPageNumber() es exacto
+            insert_tasks.append((pagina_fisica_actual, pdf))
+
+            cursor_y = PAGE_HEIGHT - 100
+            c.setFont("Helvetica-Bold", 14)
+            c.drawString(MARGIN, cursor_y, f"Documento: {os.path.basename(pdf)}")
+            
+            # Actualizamos page_num para que las siguientes secciones no se desfases
+            page_num = pagina_fisica_actual
 
     # ---------------- MANTENIMIENTO ----------------
     page_num, cursor_y = render_mantenimiento(
@@ -500,39 +516,103 @@ def main():
     )
 
     # =========================
-    # ANEXOS
+    # ANEXOS (DISEÑO ESTÁNDAR + LINKS)
     # =========================
     if index:
         index.add("Anexos", page_num + 1, level=1)
     
+    # Creamos una página nueva para el listado
+    c.showPage()
+    page_num += 1
+    draw_header_footer(c, page_num, project_data)
+    
+    # Dibujamos el título de la sección con el mismo estilo de las demás
+    cursor_y = PAGE_HEIGHT - 120
+    cursor_y = draw_section_title(c, "Anexos del Proyecto", cursor_y)
+    cursor_y -= 20
+    
+    c.setFont("Helvetica", 12)
+    
     for pdf in data["anexos"]:
-        c.showPage()
-        page_num += 1
-        draw_header_footer(c, page_num, project_data)
+        nombre_archivo = os.path.basename(pdf)
+        # El link apunta a la subcarpeta que crearemos luego
+        link_destino = f"anexos/{nombre_archivo}"
         
-        insert_tasks.append((page_num, pdf))
+        # Dibujamos el texto del anexo
+        c.setFillColor("blue") # Color azul para identificar que es un link
+        c.drawString(MARGIN + 20, cursor_y, f"• {nombre_archivo}")
         
-        cursor_y = PAGE_HEIGHT - 100
-        c.setFont("Helvetica-Bold", 14)
-        c.drawString(MARGIN, cursor_y, f"Anexo: {os.path.basename(pdf)}")
+        # Creamos el área clickeable (el "botón" invisible)
+        # El orden es: (x_izq, y_inf, x_der, y_sup)
+        c.linkURL(link_destino, (MARGIN + 20, cursor_y, MARGIN + 300, cursor_y + 12))
+        
+        cursor_y -= 25 # Espacio entre cada nombre de archivo
+        
+        # Si hay muchos anexos y se acaba la hoja, creamos otra
+        if cursor_y < 150:
+            c.showPage()
+            page_num += 1
+            draw_header_footer(c, page_num, project_data)
+            cursor_y = PAGE_HEIGHT - 120
 
-    c.save() # Guarda el PDF con las hojas de marcador
+    c.save() # Guardamos el borrador con los links listos
 
-    print("Insertando archivos PDF en sus posiciones correspondientes...")
-    merger = PdfMerger()
-    merger.append("output/mvp_imagenes.pdf")
+    print("Insertando archivos PDF y generando versión final...")
+    reader = PdfReader("output/mvp_imagenes.pdf")
+    writer = PdfWriter()
+    
+    # Creamos el buscador de tareas
+    tareas_dict = {p[0]: p[1] for p in insert_tasks}
 
-    # Insertamos los PDFs de atrás hacia adelante para no romper los índices de página
-    # al ir añadiendo hojas nuevas.
-    for p_num, pdf_path in sorted(insert_tasks, key=lambda x: x[0], reverse=True):
-        if os.path.exists(pdf_path):
-            # insert(página_donde_va, archivo)
-            # Usamos p_num porque merger.append ya puso la portada y todo lo demás
-            merger.merge(p_num, pdf_path)
+    for i, page in enumerate(reader.pages):
+        # i es el índice (0, 1, 2...)
+        # num_pdf es la página humana que guardamos en insert_tasks
+        num_pdf = i + 1 
+        
+        if num_pdf in tareas_dict:
+            ruta_pdf_real = tareas_dict[num_pdf]
+            if os.path.exists(ruta_pdf_real):
+                print(f"-> Reemplazando marcador en página {num_pdf} por {os.path.basename(ruta_pdf_real)}")
+                pdf_externo = PdfReader(ruta_pdf_real)
+                for page_ext in pdf_externo.pages:
+                    writer.add_page(page_ext)
+                # Al NO hacer writer.add_page(page), borramos el marcador
+            else:
+                writer.add_page(page) # Si no existe el archivo, dejamos el marcador por seguridad
+        else:
+            # Esta es una página normal, la pasamos al PDF final
+            writer.add_page(page)
 
-    output_path = "output/Reporte_Final_Completo.pdf"
-    merger.write(output_path)
-    merger.close()
+    # --- GUARDADO EN CARPETA DE ENTREGA ---
+    entrega_dir = "output/Reporte_Final_Entrega"
+    anexos_dir = os.path.join(entrega_dir, "anexos")
+    
+    if os.path.exists(entrega_dir):
+        shutil.rmtree(entrega_dir)
+    os.makedirs(anexos_dir)
+
+    # --- GUARDADO EN CARPETA DE ENTREGA ---
+    output_path = os.path.join(entrega_dir, "Reporte_Principal.pdf")
+    
+    # Limpieza de duplicados y optimización pasiva
+    writer.add_metadata(reader.metadata) 
+    
+    # En lugar de compress_content_streams (que puede fallar), 
+    # usamos esta opción de PyPDF2 que es más estable:
+    for page in writer.pages:
+        # Esto elimina datos innecesarios de las imágenes sin comprimir agresivamente
+        if "/Resources" in page and "/XObject" in page["/Resources"]:
+            pass 
+
+    with open(output_path, "wb") as f:
+        writer.write(f)
+
+    # Copiamos los anexos a la carpeta
+    for pdf_anexo in data["anexos"]:
+        if os.path.exists(pdf_anexo):
+            shutil.copy(pdf_anexo, anexos_dir)
+
+    print(f"✅ Proceso completo. Carpeta generada en: {entrega_dir}")
 
 if __name__ == "__main__":
     main()

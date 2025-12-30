@@ -142,7 +142,7 @@ def nueva_pagina_con_titulo(canvas, page_num, project_data, titulo):
     cursor_y = draw_section_title(canvas, titulo, cursor_y)
     return page_num, cursor_y
 
-def draw_index(canvas, index_items, start_page=1):
+def draw_index(canvas, index_items, project_data, start_page=1):
     cursor_y = PAGE_HEIGHT - 120
 
     # ----- TÍTULO -----
@@ -179,7 +179,8 @@ def draw_index(canvas, index_items, start_page=1):
 
         if cursor_y < 100:
             canvas.showPage()
-            draw_header_footer(canvas, start_page, item.get("project_data"))
+            # Aquí pasamos project_data correctamente:
+            draw_header_footer(canvas, start_page, project_data) 
             cursor_y = PAGE_HEIGHT - 100
 
         # ----- PUNTOS -----
