@@ -28,6 +28,7 @@ from file_engine import (
     clasificar_archivos,
     build_mantenimiento_tree,
     agrupar_pdfs_por_categoria,
+    calcular_paginas_indice,
     limpiar_nombre,
     obtener_niveles,
 )
@@ -83,7 +84,13 @@ def imprimir_resumen(data):
 
 
 def render_mantenimiento(
-    canvas, page_num, cursor_y, tree, pdf_tree, project_data, index=None, insert_tasks=None
+    canvas,
+    cursor_y,
+    tree,
+    pdf_tree,
+    project_data,
+    index=None,
+    insert_tasks=None,
 ):
 
     MIN_BOTTOM = 120  # margen seguro abajo (logos + número + aire)
@@ -91,11 +98,12 @@ def render_mantenimiento(
 
     for seccion, subsecciones in tree.items():
 
-        page_num, cursor_y = nueva_pagina_con_titulo(
-            canvas, page_num, project_data, seccion
+        cursor_y = nueva_pagina_con_titulo(
+            canvas, project_data, seccion
         )
         if index:
-            index.add(seccion, page_num, level=1)
+            index.add(seccion, canvas.getPageNumber(), level=1)
+
         cursor_y -= TITLE_GAP  # ✅ separación real tras título de sección
 
         for subseccion, grupos in subsecciones.items():
@@ -103,30 +111,30 @@ def render_mantenimiento(
                 # si no cabe el subtítulo, nueva página
                 if cursor_y < (MIN_BOTTOM + 40):
                     canvas.showPage()
-                    page_num += 1
-                    draw_header_footer(canvas, page_num, project_data)
+                    draw_header_footer(canvas, canvas.getPageNumber(), project_data)
                     cursor_y = PAGE_HEIGHT - 100
                     cursor_y = draw_section_title(canvas, seccion, cursor_y)
 
                 cursor_y = draw_subsection_title(canvas, subseccion, cursor_y)
                 if index:
-                    index.add(subseccion, page_num, level=2)
+                    index.add(subseccion, canvas.getPageNumber(), level=2)
+
                 cursor_y -= TITLE_GAP
 
             for grupo, categorias in grupos.items():
                 if grupo:
                     if cursor_y < (MIN_BOTTOM + 40):
                         canvas.showPage()
-                        page_num += 1
-                        draw_header_footer(canvas, page_num, project_data)
+                        draw_header_footer(canvas, canvas.getPageNumber(), project_data)
                         cursor_y = PAGE_HEIGHT - 100
                         cursor_y = draw_section_title(canvas, seccion, cursor_y)
 
                     cursor_y = draw_subsection_title(canvas, grupo, cursor_y)
                     if index:
-                        index.add(grupo, page_num, level=3)
+                        index.add(grupo, canvas.getPageNumber(), level=3)
+
                     cursor_y -= TITLE_GAP
-                
+
                 contenido_dibujado = False
 
                 for categoria, imagenes in categorias.items():
@@ -143,8 +151,7 @@ def render_mantenimiento(
                     if categoria:
                         if cursor_y < (MIN_BOTTOM + 40):
                             canvas.showPage()
-                            page_num += 1
-                            draw_header_footer(canvas, page_num, project_data)
+                            draw_header_footer(canvas, canvas.getPageNumber(), project_data)
                             cursor_y = PAGE_HEIGHT - 100
                             cursor_y = draw_section_title(canvas, seccion, cursor_y)
 
@@ -162,8 +169,7 @@ def render_mantenimiento(
                         #  si no hay espacio suficiente, nueva página (antes de dibujar)
                         if cursor_y < (MIN_BOTTOM + 250):
                             canvas.showPage()
-                            page_num += 1
-                            draw_header_footer(canvas, page_num, project_data)
+                            draw_header_footer(canvas, canvas.getPageNumber(), project_data)
                             cursor_y = PAGE_HEIGHT - 100
                             cursor_y = draw_section_title(canvas, seccion, cursor_y)
 
@@ -176,33 +182,48 @@ def render_mantenimiento(
 
                         cursor_y -= used_height
                         contenido_dibujado = True
-                        
-                    if contenido_dibujado:
+
+
+                    if contenido_dibujado and cursor_y < (PAGE_HEIGHT - 150):
+
                         canvas.showPage()
-                        page_num += 1
-                        draw_header_footer(canvas, page_num, project_data)
+                        draw_header_footer(canvas, canvas.getPageNumber(), project_data)
                         cursor_y = PAGE_HEIGHT - 100
                         cursor_y = draw_section_title(canvas, seccion, cursor_y)
 
-                    pdf_de_esta_cat = pdf_tree.get(seccion, {}).get(subseccion, {}).get(grupo, {}).get(categoria, [])
-            
+
+                    pdf_de_esta_cat = (
+                        pdf_tree.get(seccion, {})
+                        .get(subseccion, {})
+                        .get(grupo, {})
+                        .get(categoria, [])
+                    )
+
                     for pdf in pdf_de_esta_cat:
                         # Dentro de render_mantenimiento en main.py:
                         canvas.showPage()
-                        actual_p = canvas.getPageNumber() # Obtener página real del canvas
+                        actual_p = (
+                            canvas.getPageNumber()
+                        )  # Obtener página real del canvas
                         draw_header_footer(canvas, actual_p, project_data)
 
                         if insert_tasks is not None:
                             # Usamos la página real entregada por ReportLab
-                            insert_tasks.append((actual_p, pdf)) 
+                            insert_tasks.append((actual_p, pdf))
 
-                        page_num = actual_p # Sincronizar contador
+                        canvas.getPageNumber == actual_p  # Sincronizar contador
 
                         # Dibujamos la carátula/marcador
                         cursor_y = PAGE_HEIGHT - 120
-                        cursor_y = draw_section_title(canvas, "Documentación Anexa", cursor_y)
+                        cursor_y = draw_section_title(
+                            canvas, "Documentación Anexa", cursor_y
+                        )
+
                         canvas.setFont("Helvetica", 11)
-                        canvas.drawString(MARGIN, cursor_y, f"Archivo: {os.path.basename(pdf)}")
+                        canvas.drawString(
+                            MARGIN, cursor_y, f"Archivo: {os.path.basename(pdf)}"
+                        )
+
                         contenido_dibujado = True
 
                     pdfs_categoria = (
@@ -214,8 +235,7 @@ def render_mantenimiento(
 
                     for pdf in pdfs_categoria:
                         canvas.showPage()
-                        page_num += 1
-                        draw_header_footer(canvas, page_num, project_data)
+                        draw_header_footer(canvas, canvas.getPageNumber(), project_data)
 
                         cursor_y = PAGE_HEIGHT - 120
                         cursor_y = draw_section_title(canvas, "Documentación", cursor_y)
@@ -223,19 +243,20 @@ def render_mantenimiento(
                         canvas.setFont("Helvetica", 11)
                         canvas.drawString(MARGIN, cursor_y, os.path.basename(pdf))
 
-    return page_num, cursor_y
+    return cursor_y
 
 
 def build_pdf(
     filename, with_index, data, mantenimiento_tree, index_items=None, index=None
 ):
-
+    # pageCompression=1 es genial para que no pese tanto
     c = canvas.Canvas(filename, pagesize=A4, pageCompression=1)
 
-    page_num = 0
+    # Solo necesitamos rastrear el cursor vertical, el número lo lleva el canvas
     cursor_y = PAGE_HEIGHT - 100
 
     # -------- PORTADA --------
+    # draw_cover internamente ya llama a draw_header_footer con None (sin número)
     draw_cover(
         c,
         {
@@ -245,27 +266,36 @@ def build_pdf(
         },
         project_data,
     )
-    page_num += 1
 
-    # INTRODUCCIÓN (página 1)
-    draw_header_footer(c, page_num, project_data)
-    draw_introduccion(c, project_data["introduccion"])
-    page_num += 1
+    # -------- INTRODUCCIÓN --------
+    # Al salir de draw_cover ya hubo un showPage(), así que aquí estamos en la pág 2
+    draw_header_footer(c, c.getPageNumber(), project_data)
+    # Importante: draw_introduccion ahora recibe project_data para sus propios saltos
+    cursor_y = draw_introduccion(c, project_data["introduccion"], project_data)
+
+    # Preparamos para lo que sigue (Ubicación o Índice)
+    c.showPage()
 
     # -------- ÍNDICE (solo si ya existe) --------
     if with_index and index_items:
-        draw_header_footer(c, page_num, project_data)
-        draw_index(c, index_items, project_data, start_page=page_num + 1)
-        page_num += 1
+        draw_header_footer(c, c.getPageNumber(), project_data)
+        # Eliminamos start_page, el layout ahora usa getPageNumber()
+        draw_index(c, index_items, project_data)
+        # draw_index ya termina con un showPage() interno
 
     # -------- UBICACIÓN --------
     imagenes_restantes = data["ubicacion"][:]
 
     while imagenes_restantes:
-        draw_header_footer(c, page_num, project_data)
+        # Dibujamos encabezado de la página actual de ubicación
+        draw_header_footer(c, c.getPageNumber(), project_data)
 
         cursor_y = draw_section_title(c, "Ubicación")
         cursor_y -= 20
+
+        # Si quieres que la ubicación aparezca en el índice:
+        if index:
+            index.add("Ubicación", c.getPageNumber(), level=1)
 
         imagenes_restantes, used_height = draw_images(
             c,
@@ -276,14 +306,15 @@ def build_pdf(
 
         cursor_y -= used_height
 
+        # Si quedan más imágenes de ubicación, saltamos de página
         if imagenes_restantes:
             c.showPage()
-            page_num += 1
             cursor_y = PAGE_HEIGHT - 100
 
     # -------- MANTENIMIENTO --------
-    page_num, cursor_y = render_mantenimiento(
-        c, page_num, cursor_y, mantenimiento_tree, project_data
+    # MODIFICADO: Solo enviamos y recibimos cursor_y
+    cursor_y = render_mantenimiento(
+        c, cursor_y, mantenimiento_tree, project_data, index=index
     )
 
     c.save()
@@ -313,53 +344,43 @@ def main():
     pdfs_mantenimiento_tree = agrupar_pdfs_por_categoria(
         data["mantenimiento"]["pdfs"], raiz
     )
-    
+
     insert_tasks = []
 
     # ============================================================
-    # PRIMERA PASADA (solo recolectar índice)
+    # PRIMERA PASADA (Solo para recolectar el Índice)
     # ============================================================
-
     index = IndexCollector()
 
-    c = canvas.Canvas("output/_tmp.pdf", pagesize=A4, pageCompression=1)
-
-    page_num = 0
+    # Archivo temporal para medir distancias y páginas
+    c = canvas.Canvas("output/_tmp_recolector.pdf", pagesize=A4)
     cursor_y = PAGE_HEIGHT - 100
 
     # ---------------- PORTADA ----------------
-    draw_cover(
-        c,
-        {
-            "titulo": project_data["titulo"],
-            "info_extra": project_data["info_extra"],
-            "imagen_portada": project_data["imagen_portada"],
-        },
-        project_data,
-    )
-    page_num += 1
+    draw_cover(c, project_data, project_data)
+    # Al salir de draw_cover, el canvas ya hizo un showPage() internamente
 
-    # INTRODUCCIÓN (página 1)
-    draw_header_footer(c, page_num, project_data)
-    draw_introduccion(c, project_data["introduccion"])
-    page_num += 1
+    # ---------------- INTRODUCCIÓN ----------------
+    draw_header_footer(c, c.getPageNumber(), project_data)
+    # Importante: enviamos project_data para que draw_introduccion gestione sus propios saltos
+    cursor_y = draw_introduccion(c, project_data["introduccion"], project_data)
     c.showPage()
+    
+    # --- Simulación de espacio para el Índice ---
+    num_paginas_idx = calcular_paginas_indice(mantenimiento_tree, data)
+    for _ in range(num_paginas_idx):
+        c.showPage()
 
     # ---------------- UBICACIÓN ----------------
-    ubicacion_indexed = False
+    index.add("Ubicación", c.getPageNumber(), level=1)
     imagenes_restantes = data["ubicacion"][:]
 
     while imagenes_restantes:
-        draw_header_footer(c, page_num, project_data)
-
+        draw_header_footer(c, c.getPageNumber(), project_data)
         cursor_y = draw_section_title(c, "Ubicación")
-
-        if not ubicacion_indexed:
-            index.add("Ubicación", page_num, level=1)
-            ubicacion_indexed = True
-
         cursor_y -= 20
 
+        # Mantenemos tu lógica de 1 o 2 imágenes
         per_page = 1 if len(imagenes_restantes) == 1 else 2
 
         imagenes_restantes, used_height = draw_images(
@@ -368,251 +389,209 @@ def main():
             per_page=per_page,
             start_y=cursor_y,
         )
-
         cursor_y -= used_height
 
         if imagenes_restantes:
             c.showPage()
-            page_num += 1
             cursor_y = PAGE_HEIGHT - 100
 
-    # =========================
-    # INVENTARIO
-    # =========================
-    # === EN LA PRIMERA PASADA (alrededor de la línea 360) ===
-    if index:
-        index.add("Inventario", page_num + 1, level=1)
 
-    for pdf in data["inventario"]:
-        c.showPage()
-        page_num += 1
-        # Simulamos el desplazamiento: si el PDF tiene 5 páginas, 
-        # sumamos esas 4 extra al contador para que el índice sepa dónde estará lo siguiente.
-        if os.path.exists(pdf):
-            reader_temp = PdfReader(pdf)
-            paginas_extras = len(reader_temp.pages) - 1
-            page_num += paginas_extras
+    # ---------------- INVENTARIO ----------------
+    if data["inventario"]:
+
+        for pdf in data["inventario"]:
+            # 1. Dibujamos la página del marcador (la que tendrá el encabezado)
+            c.showPage()
+            
+            # Si es el primer PDF del inventario, registramos la sección
+            if pdf == data["inventario"][0]:
+                index.add("Inventario", c.getPageNumber(), level=1)
+
+            # 2. SIMULACIÓN: Si el PDF tiene 5 páginas, el índice debe saltar 4 páginas más
+            # para que la siguiente sección no empiece en un número falso.
+            if os.path.exists(pdf):
+                reader_temp = PdfReader(pdf)
+                # Saltamos N-1 páginas porque la primera ya la creamos con showPage()
+                for _ in range(len(reader_temp.pages) - 1):
+                    c.showPage()
 
     # ---------------- MANTENIMIENTO ----------------
-    page_num, cursor_y = render_mantenimiento(
+    # Esta es la función que limpiamos antes. Solo devuelve cursor_y.
+    cursor_y = render_mantenimiento(
         c,
-        page_num,
-        cursor_y,
+        PAGE_HEIGHT - 100,  # Iniciamos cursor arriba
         mantenimiento_tree,
         pdfs_mantenimiento_tree,
         project_data,
-        index=index,  # 👈 importante
-        insert_tasks=insert_tasks,
+        index=index,  # Aquí se recolectan niveles 1, 2 y 3
+        insert_tasks=None,  # En la primera pasada no necesitamos anotar tareas de reemplazo
     )
 
-    # =========================
-    # ANEXOS
-    # =========================
-    if index:
-        index.add("Anexos", page_num + 1, level=1)
+    # ---------------- ANEXOS ----------------
+    # Aseguramos que los Anexos empiecen en página nueva
+    c.showPage()
+    index.add("Anexos", c.getPageNumber(), level=1)
 
-    for pdf in data["anexos"]:
-        c.showPage()
-        page_num += 1
-        draw_header_footer(c, page_num, project_data)
-        cursor_y = PAGE_HEIGHT - 100
-        c.setFont("Helvetica-Bold", 14)
-        c.drawString(MARGIN, cursor_y, f"Anexo: {os.path.basename(pdf)}")
+    # Opcional: puedes simular el listado de anexos si quieres que el índice sea ultra preciso
+    # pero normalmente es solo una página.
 
-    c.save()
+    c.save()  # Guardamos para procesar el index.items
 
     index_items = index.get_items()
 
     # ============================================================
-    # SEGUNDA PASADA (PDF FINAL + ÍNDICE)
+    # SEGUNDA PASADA (Generación del PDF con Diseño y Marcadores)
     # ============================================================
+    insert_tasks = []  # Aquí anotamos: "En la página X, va el PDF Y"
 
     c = canvas.Canvas("output/mvp_imagenes.pdf", pagesize=A4, pageCompression=1)
 
-    page_num = 0
-    cursor_y = PAGE_HEIGHT - 100
-
     # ---------------- PORTADA ----------------
-    draw_cover(
-        c,
-        {
-            "titulo": project_data["titulo"],
-            "info_extra": project_data["info_extra"],
-            "imagen_portada": project_data["imagen_portada"],
-        },
-        project_data,
-    )
-    page_num += 1
+    draw_cover(c, project_data, project_data)
 
-    # INTRODUCCIÓN (página 1)
-    draw_header_footer(c, page_num, project_data)
-    draw_introduccion(c, project_data["introduccion"])
-    page_num += 1
+    # ---------------- INTRODUCCIÓN ----------------
+    draw_header_footer(c, c.getPageNumber(), project_data)
+    # Pasamos project_data para que draw_introduccion maneje sus propios saltos de página
+    cursor_y = draw_introduccion(c, project_data["introduccion"], project_data)
     c.showPage()
 
     # ---------------- ÍNDICE ----------------
-    draw_header_footer(c, page_num, project_data)
-    draw_index(c, index_items, project_data, start_page=page_num + 1)
-    page_num += 1
+    # Ya no calculamos start_page, draw_index usa getPageNumber() internamente
+    draw_header_footer(c, c.getPageNumber(), project_data)
+    draw_index(c, index_items, project_data)
+    # Al salir de draw_index ya se hizo un showPage()
 
     # ---------------- UBICACIÓN ----------------
     imagenes_restantes = data["ubicacion"][:]
-
     while imagenes_restantes:
-        draw_header_footer(c, page_num, project_data)
-
+        draw_header_footer(c, c.getPageNumber(), project_data)
         cursor_y = draw_section_title(c, "Ubicación")
         cursor_y -= 20
 
         per_page = 1 if len(imagenes_restantes) == 1 else 2
-
         imagenes_restantes, used_height = draw_images(
-            c,
-            imagenes_restantes,
-            per_page=per_page,
-            start_y=cursor_y,
+            c, imagenes_restantes, per_page=per_page, start_y=cursor_y
         )
-
-        cursor_y -= used_height
 
         if imagenes_restantes:
             c.showPage()
-            page_num += 1
-            cursor_y = PAGE_HEIGHT - 100
 
-    # =========================
-    # INVENTARIO (Segunda Pasada)
-    # =========================
-    if data["inventario"]:
-        for pdf in data["inventario"]:
-            c.showPage() 
-            # IMPORTANTE: No calcules el número sumando. 
-            # Pregúntale al canvas su número de página real actual:
-            pagina_fisica_actual = c.getPageNumber() 
-            
-            draw_header_footer(c, pagina_fisica_actual, project_data)
+    # ---------------- INVENTARIO ----------------
+    for pdf in data["inventario"]:
+        c.showPage()
+        p_actual = c.getPageNumber()
 
-            # REGISTRAMOS LA PÁGINA REAL
-            # Eliminamos el "+ 1" que tenías antes, ya que getPageNumber() es exacto
-            insert_tasks.append((pagina_fisica_actual, pdf))
+        # Dibujamos el encabezado en la página que servirá de marcador
+        draw_header_footer(c, p_actual, project_data)
 
-            cursor_y = PAGE_HEIGHT - 100
-            c.setFont("Helvetica-Bold", 14)
-            c.drawString(MARGIN, cursor_y, f"Documento: {os.path.basename(pdf)}")
-            
-            # Actualizamos page_num para que las siguientes secciones no se desfases
-            page_num = pagina_fisica_actual
+        # Guardamos la tarea para el post-procesado
+        insert_tasks.append((p_actual, pdf))
+
+        c.setFont("Helvetica-Bold", 14)
+        c.drawString(MARGIN, PAGE_HEIGHT - 120, f"Documento: {os.path.basename(pdf)}")
 
     # ---------------- MANTENIMIENTO ----------------
-    page_num, cursor_y = render_mantenimiento(
+    render_mantenimiento(
         c,
-        page_num,
-        cursor_y,
+        PAGE_HEIGHT - 100,
         mantenimiento_tree,
         pdfs_mantenimiento_tree,
         project_data,
-        index=None,  # ya no se recolecta
+        index=None,  # Ya no recolectamos, ya tenemos index_items
         insert_tasks=insert_tasks,
     )
 
-    # =========================
-    # ANEXOS (DISEÑO ESTÁNDAR + LINKS)
-    # =========================
-    if index:
-        index.add("Anexos", page_num + 1, level=1)
-    
-    # Creamos una página nueva para el listado
+    # ---------------- ANEXOS (Listado con Links) ----------------
     c.showPage()
-    page_num += 1
-    draw_header_footer(c, page_num, project_data)
-    
-    # Dibujamos el título de la sección con el mismo estilo de las demás
-    cursor_y = PAGE_HEIGHT - 120
-    cursor_y = draw_section_title(c, "Anexos del Proyecto", cursor_y)
+    draw_header_footer(c, c.getPageNumber(), project_data)
+
+    cursor_y = draw_section_title(c, "Anexos del Proyecto", PAGE_HEIGHT - 120)
     cursor_y -= 20
-    
+
     c.setFont("Helvetica", 12)
-    
     for pdf in data["anexos"]:
-        nombre_archivo = os.path.basename(pdf)
-        # El link apunta a la subcarpeta que crearemos luego
-        link_destino = f"anexos/{nombre_archivo}"
-        
-        # Dibujamos el texto del anexo
-        c.setFillColor("blue") # Color azul para identificar que es un link
-        c.drawString(MARGIN + 20, cursor_y, f"• {nombre_archivo}")
-        
-        # Creamos el área clickeable (el "botón" invisible)
-        # El orden es: (x_izq, y_inf, x_der, y_sup)
-        c.linkURL(link_destino, (MARGIN + 20, cursor_y, MARGIN + 300, cursor_y + 12))
-        
-        cursor_y -= 25 # Espacio entre cada nombre de archivo
-        
-        # Si hay muchos anexos y se acaba la hoja, creamos otra
-        if cursor_y < 150:
+        nombre = os.path.basename(pdf)
+        c.setFillColor("blue")
+        c.drawString(MARGIN + 20, cursor_y, f"• {nombre}")
+
+        # El link es relativo a la carpeta donde estará el PDF final
+        c.linkURL(
+            f"anexos/{nombre}", (MARGIN + 20, cursor_y, MARGIN + 350, cursor_y + 12)
+        )
+
+        cursor_y -= 25
+        if cursor_y < 120:
             c.showPage()
-            page_num += 1
-            draw_header_footer(c, page_num, project_data)
+            draw_header_footer(c, c.getPageNumber(), project_data)
             cursor_y = PAGE_HEIGHT - 120
 
-    c.save() # Guardamos el borrador con los links listos
+    c.save()
 
     print("Insertando archivos PDF y generando versión final...")
+
+    # Abrimos el lector principal
     reader = PdfReader("output/mvp_imagenes.pdf")
     writer = PdfWriter()
-    
-    # Creamos el buscador de tareas
+
+    # Creamos el buscador de tareas (Página: Ruta_PDF)
     tareas_dict = {p[0]: p[1] for p in insert_tasks}
 
+    # Mantenemos una lista de lectores para que los archivos no se cierren
+    # antes de que el writer termine su trabajo
+    lectores_externos = []
+
     for i, page in enumerate(reader.pages):
-        # i es el índice (0, 1, 2...)
-        # num_pdf es la página humana que guardamos en insert_tasks
-        num_pdf = i + 1 
-        
+        num_pdf = i + 1
+
         if num_pdf in tareas_dict:
             ruta_pdf_real = tareas_dict[num_pdf]
             if os.path.exists(ruta_pdf_real):
-                print(f"-> Reemplazando marcador en página {num_pdf} por {os.path.basename(ruta_pdf_real)}")
-                pdf_externo = PdfReader(ruta_pdf_real)
-                for page_ext in pdf_externo.pages:
+                print(
+                    f"-> Insertando: {os.path.basename(ruta_pdf_real)} (Sustituye pág {num_pdf})"
+                )
+
+                ext_reader = PdfReader(ruta_pdf_real)
+                lectores_externos.append(
+                    ext_reader
+                )  # Evita que se limpie de memoria antes de tiempo
+
+                for page_ext in ext_reader.pages:
                     writer.add_page(page_ext)
-                # Al NO hacer writer.add_page(page), borramos el marcador
+                # NOTA: Al no añadir 'page', el marcador desaparece automáticamente
             else:
-                writer.add_page(page) # Si no existe el archivo, dejamos el marcador por seguridad
+                print(
+                    f"⚠️ Archivo no encontrado: {ruta_pdf_real}. Manteniendo marcador."
+                )
+                writer.add_page(page)
         else:
-            # Esta es una página normal, la pasamos al PDF final
+            # Página normal (incluye la de Anexos con sus links)
             writer.add_page(page)
 
-    # --- GUARDADO EN CARPETA DE ENTREGA ---
+    # --- PREPARACIÓN DE CARPETAS ---
     entrega_dir = "output/Reporte_Final_Entrega"
     anexos_dir = os.path.join(entrega_dir, "anexos")
-    
+
     if os.path.exists(entrega_dir):
         shutil.rmtree(entrega_dir)
     os.makedirs(anexos_dir)
 
-    # --- GUARDADO EN CARPETA DE ENTREGA ---
+    # --- ESCRITURA FINAL ---
     output_path = os.path.join(entrega_dir, "Reporte_Principal.pdf")
-    
-    # Limpieza de duplicados y optimización pasiva
-    writer.add_metadata(reader.metadata) 
-    
-    # En lugar de compress_content_streams (que puede fallar), 
-    # usamos esta opción de PyPDF2 que es más estable:
-    for page in writer.pages:
-        # Esto elimina datos innecesarios de las imágenes sin comprimir agresivamente
-        if "/Resources" in page and "/XObject" in page["/Resources"]:
-            pass 
+
+    # Copiamos metadatos básicos
+    if reader.metadata:
+        writer.add_metadata(reader.metadata)
 
     with open(output_path, "wb") as f:
         writer.write(f)
 
-    # Copiamos los anexos a la carpeta
-    for pdf_anexo in data["anexos"]:
+    # --- COPIAR ANEXOS EXTERNOS ---
+    for pdf_anexo in data.get("anexos", []):
         if os.path.exists(pdf_anexo):
             shutil.copy(pdf_anexo, anexos_dir)
 
     print(f"✅ Proceso completo. Carpeta generada en: {entrega_dir}")
+
 
 if __name__ == "__main__":
     main()

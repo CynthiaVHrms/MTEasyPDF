@@ -107,3 +107,23 @@ def agrupar_pdfs_por_categoria(pdfs, raiz):
         ].append(pdf)
 
     return pdf_tree
+
+def calcular_paginas_indice(mantenimiento_tree, data):
+    # Estimamos 35 líneas por página
+    lineas_por_pagina = 35
+    
+    # Iniciamos conteo con Ubicación, Inventario y Anexos
+    total_items = 1 + len(data["inventario"]) + 1 
+    
+    # Sumamos los niveles del árbol de mantenimiento
+    for seccion, sub in mantenimiento_tree.items():
+        total_items += 1  # Nivel 1
+        for sub_sec, grupos in sub.items():
+            if sub_sec: total_items += 1  # Nivel 2
+            for grupo, categorias in grupos.items():
+                if grupo: total_items += 1  # Nivel 3
+                # Si las categorías también van al índice, sumarlas aquí
+                # total_items += len(categorias)
+                
+    # Cálculo de páginas (redondeo hacia arriba)
+    return (total_items + lineas_por_pagina - 1) // lineas_por_pagina
