@@ -175,3 +175,63 @@ def draw_introduccion(canvas, texto, project_data, start_y=None):
         cursor_y -= line_height
 
     return cursor_y
+
+
+def render_documentacion_links(canvas, cursor_y, pdf_tree, project_data, index=None):
+    canvas.showPage()
+    draw_header_footer(canvas, canvas.getPageNumber(), project_data)
+    cursor_y = PAGE_HEIGHT - 100
+    
+    # Título principal de la sección
+    cursor_y = draw_section_title(canvas, "DOCUMENTACIÓN TÉCNICA", cursor_y)
+    if index:
+        index.add("Documentación Técnica", canvas.getPageNumber(), level=1)
+    
+    cursor_y -= 20
+
+    for seccion, subsecciones in pdf_tree.items():
+        # Verificamos si la sección tiene algún PDF antes de escribir el título
+        tiene_pdfs = any(pdf_list for sub in subsecciones.values() for grupo in sub.values() for cat in grupo.values() for pdf_list in cat.values() if pdf_list)
+        
+        if not tiene_pdfs:
+            continue
+
+        # Título de la sección de mantenimiento a la que pertenecen
+        canvas.setFont("Helvetica-Bold", 12)
+        canvas.setFillColorRGB(0.2, 0.4, 0.6) # Un color distinto para separar
+        canvas.drawString(MARGIN, cursor_y, f"Archivos de: {seccion}")
+        canvas.setFillColor("black")
+        cursor_y -= 15
+
+        for subseccion, grupos in subsecciones.items():
+            for grupo, categorias in grupos.items():
+                for categoria, pdfs in categorias.items():
+                    for pdf_path in pdfs:
+                        # Control de salto de página
+                        if cursor_y < 120:
+                            canvas.showPage()
+                            draw_header_footer(canvas, canvas.getPageNumber(), project_data)
+                            cursor_y = PAGE_HEIGHT - 100
+                        
+                        nombre_archivo = os.path.basename(pdf_path)
+                        # Identificador de dónde viene el archivo
+                        origen = f"{subseccion} > {grupo} > {categoria}" if categoria else subseccion
+                        
+                        canvas.setFont("Helvetica", 10)
+                        canvas.drawString(MARGIN + 20, cursor_y, f"• {nombre_archivo}")
+                        
+                        # Texto pequeño del origen a la derecha
+                        canvas.setFont("Helvetica-Oblique", 8)
+                        canvas.setFillColorRGB(0.5, 0.5, 0.5)
+                        canvas.drawRightString(PAGE_WIDTH - MARGIN, cursor_y, origen)
+                        
+                        # Crear el link
+                        canvas.linkURL(f"anexos/{nombre_archivo}", 
+                                       (MARGIN, cursor_y - 2, PAGE_WIDTH - MARGIN, cursor_y + 10))
+                        
+                        canvas.setFillColor("black")
+                        cursor_y -= 14
+        
+        cursor_y -= 10 # Espacio entre secciones de mantenimiento
+        
+    return cursor_y

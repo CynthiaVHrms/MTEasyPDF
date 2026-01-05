@@ -476,19 +476,28 @@ def main():
         if imagenes_restantes:
             c.showPage()
 
-    # ---------------- INVENTARIO ----------------
+    # ---------------- INVENTARIO (Segunda Pasada) ----------------
     for pdf in data["inventario"]:
         c.showPage()
         p_actual = c.getPageNumber()
-
-        # Dibujamos el encabezado en la página que servirá de marcador
         draw_header_footer(c, p_actual, project_data)
 
-        # Guardamos la tarea para el post-procesado
+        # Anotamos la página donde inicia el PDF
         insert_tasks.append((p_actual, pdf))
 
         c.setFont("Helvetica-Bold", 14)
         c.drawString(MARGIN, PAGE_HEIGHT - 120, f"Documento: {os.path.basename(pdf)}")
+
+        # Avanzamos el contador para que la pág 10 sea realmente la 10
+        if os.path.exists(pdf):
+            reader_temp = PdfReader(pdf)
+            paginas_pdf = len(reader_temp.pages)
+
+            # Si el PDF tiene más de 1 página, creamos "huecos" en el canvas
+            for _ in range(paginas_pdf - 1):
+                c.showPage()
+                # Opcional: anotar que esta página es de relleno
+                # (aunque la lógica del writer que pondremos abajo lo detectará solo)
 
     # ---------------- MANTENIMIENTO ----------------
     render_mantenimiento(
@@ -536,35 +545,42 @@ def main():
     # Creamos el buscador de tareas (Página: Ruta_PDF)
     tareas_dict = {p[0]: p[1] for p in insert_tasks}
 
-    # Mantenemos una lista de lectores para que los archivos no se cierren
-    # antes de que el writer termine su trabajo
+    # Mantenemos una lista de lectores para evitar cierres prematuros
     lectores_externos = []
+    
+    # --- VARIABLE CLAVE PARA ELIMINAR HOJAS EN BLANCO ---
+    skip_until = -1 
 
     for i, page in enumerate(reader.pages):
         num_pdf = i + 1
 
+        # Si esta página es un "hueco" que creamos en el canvas, la saltamos
+        if num_pdf <= skip_until:
+            continue
+
         if num_pdf in tareas_dict:
             ruta_pdf_real = tareas_dict[num_pdf]
             if os.path.exists(ruta_pdf_real):
-                print(
-                    f"-> Insertando: {os.path.basename(ruta_pdf_real)} (Sustituye pág {num_pdf})"
-                )
+                print(f"-> Insertando: {os.path.basename(ruta_pdf_real)} (Sustituye pág {num_pdf})")
 
                 ext_reader = PdfReader(ruta_pdf_real)
-                lectores_externos.append(
-                    ext_reader
-                )  # Evita que se limpie de memoria antes de tiempo
+                lectores_externos.append(ext_reader)
 
+                # Insertamos todas las páginas del PDF real
                 for page_ext in ext_reader.pages:
                     writer.add_page(page_ext)
-                # NOTA: Al no añadir 'page', el marcador desaparece automáticamente
+                
+                # --- LÓGICA DE SALTO ---
+                # Si el PDF real tiene 5 páginas y empezó en la 6, 
+                # el canvas generó la 7, 8, 9 y 10 como blancas.
+                # Esta línea le dice al bucle que ignore esas páginas del reader.
+                skip_until = num_pdf + len(ext_reader.pages) - 1
+                
             else:
-                print(
-                    f"⚠️ Archivo no encontrado: {ruta_pdf_real}. Manteniendo marcador."
-                )
+                print(f"⚠️ Archivo no encontrado: {ruta_pdf_real}. Manteniendo marcador.")
                 writer.add_page(page)
         else:
-            # Página normal (incluye la de Anexos con sus links)
+            # Página normal (Introducción, Ubicación, Mantenimiento, etc.)
             writer.add_page(page)
 
     # --- PREPARACIÓN DE CARPETAS ---
