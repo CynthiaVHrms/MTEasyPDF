@@ -1,6 +1,12 @@
 import os
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.colors import black
+from reportlab.platypus import Paragraph
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+
+from file_engine import (
+    limpiar_nombre,
+)
 
 PAGE_WIDTH, PAGE_HEIGHT = A4
 MARGIN = 40
@@ -29,11 +35,11 @@ def draw_cover(canvas, data, project_data):
     # Títulos
     canvas.setFillColorRGB(0, 0, 0)
     canvas.setFont("Helvetica-Bold", 26)
-    canvas.drawCentredString(PAGE_WIDTH / 2, PAGE_HEIGHT - 140, data.get("titulo", ""))
+    canvas.drawCentredString(PAGE_WIDTH / 2, PAGE_HEIGHT - 200, data.get("titulo", ""))
 
     canvas.setFont("Helvetica", 14)
     canvas.drawCentredString(
-        PAGE_WIDTH / 2, PAGE_HEIGHT - 180, data.get("info_extra", "")
+        PAGE_WIDTH / 2, PAGE_HEIGHT - 240, data.get("info_extra", "")
     )
 
     # Dibuja logos, pero el número de página se omite internamente 
@@ -144,64 +150,94 @@ def draw_index(canvas, index_items, project_data):
     canvas.showPage()
 
 def draw_introduccion(canvas, texto, project_data, start_y=None):
-    """
-    MODIFICADO: Ahora recibe project_data para los logos si hay salto de página.
-    """
     if start_y is None:
         start_y = PAGE_HEIGHT - 100
     cursor_y = start_y
 
+    # Título
     canvas.setFont("Helvetica-Bold", 18)
     canvas.drawString(MARGIN, cursor_y, "Introducción")
     canvas.line(MARGIN, cursor_y - 8, PAGE_WIDTH - MARGIN, cursor_y - 8)
     cursor_y -= 40
 
-    canvas.setFont("Helvetica", 11)
-    line_height = 16
+    # Configuración de estilos optimizada
+    styles = getSampleStyleSheet()
+    estilo_intro = ParagraphStyle(
+        'IntroStyle',
+        parent=styles['Normal'],
+        fontName='Helvetica',
+        fontSize=11,
+        leading=18,           # Mayor interlineado (antes 14)
+        alignment=0,           # 0=Izquierda (mejor para listas), 4=Justificado
+        leftIndent=30,         # Mayor margen a la izquierda (antes 0)
+        rightIndent=10,        # Un poco de margen a la derecha
+        spaceBefore=12,
+        wordWrap='LTR',        # Asegura el envoltorio de palabras estándar
+    )
 
-    for raw_line in texto.split("\n"):
-        if raw_line.strip() == "":
-            cursor_y -= line_height
-            continue
+    # PROCESAMIENTO CLAVE: 
+    # 1. Reemplazamos espacios iniciales por espacios de no ruptura (&nbsp;) para la indentación
+    # 2. Reemplazamos \n por <br/> para saltos de línea
+    lineas = []
+    for line in texto.split('\n'):
+        # Preserva espacios al inicio de la línea para indentar listas
+        espacios_iniciales = len(line) - len(line.lstrip())
+        linea_formateada = ('&nbsp;' * espacios_iniciales * 2) + line.lstrip()
+        lineas.append(linea_formateada)
+    
+    texto_final = "<br/>".join(lineas)
+    p = Paragraph(texto_final, estilo_intro)
 
-        if cursor_y < 100:
-            canvas.showPage()
-            # El número se pide al canvas automáticamente
-            draw_header_footer(canvas, canvas.getPageNumber(), project_data)
-            cursor_y = PAGE_HEIGHT - 100
-            canvas.setFont("Helvetica", 11)
-
-        canvas.drawString(MARGIN, cursor_y, raw_line)
-        cursor_y -= line_height
-
-    return cursor_y
+    # Dibujado con cálculo de altura
+    ancho_disponible = PAGE_WIDTH - (MARGIN * 2) - 30 # Restamos el leftIndent
+    w, h = p.wrap(ancho_disponible, cursor_y - 50)
+    
+    # Dibujamos en la posición calculada
+    p.drawOn(canvas, MARGIN, cursor_y - h)
+    
+    return cursor_y - h - 30
 
 
 def render_documentacion_links(canvas, cursor_y, pdf_tree, project_data, index=None):
     canvas.showPage()
     draw_header_footer(canvas, canvas.getPageNumber(), project_data)
-    cursor_y = PAGE_HEIGHT - 100
     
-    # Título principal de la sección
-    cursor_y = draw_section_title(canvas, "DOCUMENTACIÓN TÉCNICA", cursor_y)
+    # 1. Espacio superior compacto
+    cursor_y = PAGE_HEIGHT - 100 
+    cursor_y = draw_section_title(canvas, "Documentación Técnica", cursor_y)
+    
     if index:
         index.add("Documentación Técnica", canvas.getPageNumber(), level=1)
     
-    cursor_y -= 20
+    # Pegamos el primer encabezado al título principal
+    cursor_y -= 5 
 
     for seccion, subsecciones in pdf_tree.items():
-        # Verificamos si la sección tiene algún PDF antes de escribir el título
-        tiene_pdfs = any(pdf_list for sub in subsecciones.values() for grupo in sub.values() for cat in grupo.values() for pdf_list in cat.values() if pdf_list)
+        # Verificación de contenido
+        tiene_pdfs = any(
+            pdf_list 
+            for sub in subsecciones.values() 
+            for grupo in sub.values() 
+            for pdf_list in grupo.values() 
+            if pdf_list
+        )
         
         if not tiene_pdfs:
             continue
+        
+        # 2. Limpieza de nombre de sección (quitando números como "04 ")
+        seccion_aux = limpiar_nombre(seccion)
+        # Si limpiar_nombre no quita los números, lo hacemos manualmente:
+        import re
+        seccion_limpia = re.sub(r'^\d+\s*', '', seccion_aux).strip()
 
-        # Título de la sección de mantenimiento a la que pertenecen
         canvas.setFont("Helvetica-Bold", 12)
-        canvas.setFillColorRGB(0.2, 0.4, 0.6) # Un color distinto para separar
-        canvas.drawString(MARGIN, cursor_y, f"Archivos de: {seccion}")
+        canvas.setFillColorRGB(0.2, 0.4, 0.6)
+        canvas.drawString(MARGIN, cursor_y, f"Archivos de: {seccion_limpia}")
         canvas.setFillColor("black")
-        cursor_y -= 15
+        
+        # 3. Más espacio entre el encabezado azul y la lista
+        cursor_y -= 25 
 
         for subseccion, grupos in subsecciones.items():
             for grupo, categorias in grupos.items():
@@ -213,25 +249,32 @@ def render_documentacion_links(canvas, cursor_y, pdf_tree, project_data, index=N
                             draw_header_footer(canvas, canvas.getPageNumber(), project_data)
                             cursor_y = PAGE_HEIGHT - 100
                         
+                        # DEFINICIÓN CLAVE
                         nombre_archivo = os.path.basename(pdf_path)
-                        # Identificador de dónde viene el archivo
-                        origen = f"{subseccion} > {grupo} > {categoria}" if categoria else subseccion
                         
-                        canvas.setFont("Helvetica", 10)
+                        # Limpieza de textos de origen
+                        sub_l = re.sub(r'^\d+\s*', '', limpiar_nombre(subseccion)).strip()
+                        gru_l = re.sub(r'^\d+\s*', '', limpiar_nombre(grupo)).strip()
+                        origen = f"{sub_l} > {gru_l}" if grupo else sub_l
+                        
+                        # Dibujo del elemento
+                        canvas.setFont("Helvetica", 11)
+                        canvas.setFillColor("blue")
                         canvas.drawString(MARGIN + 20, cursor_y, f"• {nombre_archivo}")
                         
-                        # Texto pequeño del origen a la derecha
                         canvas.setFont("Helvetica-Oblique", 8)
                         canvas.setFillColorRGB(0.5, 0.5, 0.5)
                         canvas.drawRightString(PAGE_WIDTH - MARGIN, cursor_y, origen)
                         
-                        # Crear el link
+                        # Link (nombre_archivo ya está definido arriba)
                         canvas.linkURL(f"anexos/{nombre_archivo}", 
-                                       (MARGIN, cursor_y - 2, PAGE_WIDTH - MARGIN, cursor_y + 10))
+                                       (MARGIN, cursor_y - 2, PAGE_WIDTH - MARGIN, cursor_y + 12))
                         
                         canvas.setFillColor("black")
-                        cursor_y -= 14
+                        # 4. Espaciado entre links aumentado
+                        cursor_y -= 22 
         
-        cursor_y -= 10 # Espacio entre secciones de mantenimiento
+        # Espacio tras terminar una sección completa
+        cursor_y -= 10
         
     return cursor_y

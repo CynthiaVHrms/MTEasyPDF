@@ -1,5 +1,6 @@
 import zipfile
 import os
+import sys
 import shutil
 from PyPDF2 import PdfMerger, PdfReader, PdfWriter
 from collections import defaultdict
@@ -8,6 +9,7 @@ from reportlab.lib.pagesizes import A4
 
 from pdf_utils import (
     draw_images,
+    build_pdf_tree,
     MARGIN,
 )
 
@@ -19,6 +21,7 @@ from pdf_layout import (
     nueva_pagina_con_titulo,
     draw_index,
     draw_introduccion,
+    render_documentacion_links
 )
 
 from file_engine import (
@@ -40,20 +43,8 @@ from file_engine import (
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ZIP_PATH = "ejemplo.zip"
 TEMP_DIR = "temp"
-
+project_data = {}
 PAGE_WIDTH, PAGE_HEIGHT = A4
-
-project_data = {
-    "titulo": "Reporte de Evidencias",
-    "info_extra": "Proyecto MT - Marzo 2025",
-    "introduccion": "Este documento contiene las evidencias recopiladas durante el proyecto MT.",
-    "imagen_portada": os.path.join(BASE_DIR, "input", "portada.jpeg"),
-    "logo_sup_izq": os.path.join(BASE_DIR, "input", "Cathi.png"),
-    "logo_sup_der": os.path.join(BASE_DIR, "input", "Sari.png"),
-    "logo_inf_izq": os.path.join(BASE_DIR, "input", "Dinamics.png"),
-    "logo_inf_der": os.path.join(BASE_DIR, "input", "logo1.png"),
-}
-
 
 # ============================================================
 # FILE UTILS
@@ -92,23 +83,25 @@ def render_mantenimiento(
     index=None,
     insert_tasks=None,
 ):
+    MIN_BOTTOM = 120
+    TITLE_GAP = 2
+    hubo_contenido = False
 
-    MIN_BOTTOM = 120  # margen seguro abajo (logos + número + aire)
-    TITLE_GAP = 2  # espacio extra después de cada título/subtítulo
+    # Convertimos a listas para saber el total y usar índices
+    secciones_list = list(tree.items())
+    total_secciones = len(secciones_list)
 
-    for seccion, subsecciones in tree.items():
-
-        cursor_y = nueva_pagina_con_titulo(
-            canvas, project_data, seccion
-        )
+    for i_sec, (seccion, subsecciones) in enumerate(secciones_list):
+        cursor_y = nueva_pagina_con_titulo(canvas, project_data, seccion)
         if index:
             index.add(seccion, canvas.getPageNumber(), level=1)
+        cursor_y -= TITLE_GAP
 
-        cursor_y -= TITLE_GAP  # ✅ separación real tras título de sección
+        subsecciones_list = list(subsecciones.items())
+        total_subs = len(subsecciones_list)
 
-        for subseccion, grupos in subsecciones.items():
+        for i_sub, (subseccion, grupos) in enumerate(subsecciones_list):
             if subseccion:
-                # si no cabe el subtítulo, nueva página
                 if cursor_y < (MIN_BOTTOM + 40):
                     canvas.showPage()
                     draw_header_footer(canvas, canvas.getPageNumber(), project_data)
@@ -118,10 +111,12 @@ def render_mantenimiento(
                 cursor_y = draw_subsection_title(canvas, subseccion, cursor_y)
                 if index:
                     index.add(subseccion, canvas.getPageNumber(), level=2)
-
                 cursor_y -= TITLE_GAP
 
-            for grupo, categorias in grupos.items():
+            grupos_list = list(grupos.items())
+            total_grupos = len(grupos_list)
+
+            for i_gru, (grupo, categorias) in enumerate(grupos_list):
                 if grupo:
                     if cursor_y < (MIN_BOTTOM + 40):
                         canvas.showPage()
@@ -132,22 +127,14 @@ def render_mantenimiento(
                     cursor_y = draw_subsection_title(canvas, grupo, cursor_y)
                     if index:
                         index.add(grupo, canvas.getPageNumber(), level=3)
-
                     cursor_y -= TITLE_GAP
 
-                contenido_dibujado = False
+                categorias_list = list(categorias.items())
+                total_cats = len(categorias_list)
 
-                for categoria, imagenes in categorias.items():
-                    imagenes_categoria = []
-                    pdfs_categoria = []
-
-                    for archivo in imagenes:
-                        if archivo.lower().endswith((".jpg", ".jpeg", ".png")):
-                            imagenes_categoria.append(archivo)
-                        elif archivo.lower().endswith(".pdf"):
-                            pdfs_categoria.append(archivo)
-
-                    # Si viene título de categoría, asegúrate que quepa antes de dibujarlo
+                for i_cat, (categoria, imagenes_nativas) in enumerate(categorias_list):
+                    imagenes_categoria = [f for f in imagenes_nativas if f.lower().endswith((".jpg", ".jpeg", ".png"))]
+                    
                     if categoria:
                         if cursor_y < (MIN_BOTTOM + 40):
                             canvas.showPage()
@@ -155,94 +142,43 @@ def render_mantenimiento(
                             cursor_y = PAGE_HEIGHT - 100
                             cursor_y = draw_section_title(canvas, seccion, cursor_y)
 
-                        cursor_y = draw_subsection_title(
-                            canvas, categoria, cursor_y
-                        )  # ✅ usa retorno
+                        cursor_y = draw_subsection_title(canvas, categoria, cursor_y)
                         cursor_y -= TITLE_GAP
 
                     nombre = (categoria or "").lower()
                     layout = 2 if ("pantalla" in nombre or "pruebas" in nombre) else 4
-                    imagenes = imagenes_categoria
-
-                    # Dibuja bloques de imágenes
-                    while imagenes:
-                        #  si no hay espacio suficiente, nueva página (antes de dibujar)
+                    
+                    # Dibujamos imágenes
+                    imagenes_temp = imagenes_categoria[:]
+                    while imagenes_temp:
                         if cursor_y < (MIN_BOTTOM + 250):
                             canvas.showPage()
                             draw_header_footer(canvas, canvas.getPageNumber(), project_data)
                             cursor_y = PAGE_HEIGHT - 100
                             cursor_y = draw_section_title(canvas, seccion, cursor_y)
 
-                        imagenes, used_height = draw_images(
-                            canvas,
-                            imagenes,
-                            per_page=layout,
-                            start_y=cursor_y,
+                        imagenes_temp, used_height = draw_images(
+                            canvas, imagenes_temp, per_page=layout, start_y=cursor_y
                         )
-
                         cursor_y -= used_height
-                        contenido_dibujado = True
+                        hubo_contenido = True
 
-
-                    if contenido_dibujado and cursor_y < (PAGE_HEIGHT - 150):
-
-                        canvas.showPage()
-                        draw_header_footer(canvas, canvas.getPageNumber(), project_data)
-                        cursor_y = PAGE_HEIGHT - 100
-                        cursor_y = draw_section_title(canvas, seccion, cursor_y)
-
-
-                    pdf_de_esta_cat = (
-                        pdf_tree.get(seccion, {})
-                        .get(subseccion, {})
-                        .get(grupo, {})
-                        .get(categoria, [])
+                    # --- EL SALTO DE PÁGINA INTELIGENTE ---
+                    # Solo hacemos showPage si NO es la última categoría de la última subsección del último grupo
+                    es_el_final_absoluto = (
+                        (i_sec == total_secciones - 1) and 
+                        (i_sub == total_subs - 1) and 
+                        (i_gru == total_grupos - 1) and 
+                        (i_cat == total_cats - 1)
                     )
 
-                    for pdf in pdf_de_esta_cat:
-                        # Dentro de render_mantenimiento en main.py:
-                        canvas.showPage()
-                        actual_p = (
-                            canvas.getPageNumber()
-                        )  # Obtener página real del canvas
-                        draw_header_footer(canvas, actual_p, project_data)
-
-                        if insert_tasks is not None:
-                            # Usamos la página real entregada por ReportLab
-                            insert_tasks.append((actual_p, pdf))
-
-                        canvas.getPageNumber == actual_p  # Sincronizar contador
-
-                        # Dibujamos la carátula/marcador
-                        cursor_y = PAGE_HEIGHT - 120
-                        cursor_y = draw_section_title(
-                            canvas, "Documentación Anexa", cursor_y
-                        )
-
-                        canvas.setFont("Helvetica", 11)
-                        canvas.drawString(
-                            MARGIN, cursor_y, f"Archivo: {os.path.basename(pdf)}"
-                        )
-
-                        contenido_dibujado = True
-
-                    pdfs_categoria = (
-                        pdf_tree.get(seccion, {})
-                        .get(subseccion, {})
-                        .get(grupo, {})
-                        .get(categoria, [])
-                    )
-
-                    for pdf in pdfs_categoria:
-                        canvas.showPage()
-                        draw_header_footer(canvas, canvas.getPageNumber(), project_data)
-
-                        cursor_y = PAGE_HEIGHT - 120
-                        cursor_y = draw_section_title(canvas, "Documentación", cursor_y)
-
-                        canvas.setFont("Helvetica", 11)
-                        canvas.drawString(MARGIN, cursor_y, os.path.basename(pdf))
-
+                    if not es_el_final_absoluto:
+                        if cursor_y < (PAGE_HEIGHT - 150):
+                            canvas.showPage()
+                            draw_header_footer(canvas, canvas.getPageNumber(), project_data)
+                            cursor_y = PAGE_HEIGHT - 100
+                            cursor_y = draw_section_title(canvas, seccion, cursor_y)
+              
     return cursor_y
 
 
@@ -324,15 +260,37 @@ def build_pdf(
 # MAIN
 # ============================================================
 
+def resource_path(relative_path):
+    """ Obtiene la ruta absoluta para recursos, funciona en dev y en PyInstaller """
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.abspath("."), relative_path)
 
-def main():
+
+def main(gui_data=None, callback_progreso=None):
 
     # ============================================================
     # PREPARACIÓN
     # ============================================================
+    project_data = {}
+
+    if gui_data:
+        project_data.update(gui_data)
+        ZIP_PATH = gui_data.get("zip_path")
+    
+    # Validación estricta
+    if not project_data.get("titulo") or not ZIP_PATH:
+        raise ValueError("Error crítico: No se recibió información obligatoria.")
+
+    def reportar(n):
+        if callback_progreso: callback_progreso(n)
+
+    reportar(10) # 10% - Iniciando
 
     limpiar_temp(TEMP_DIR)
     extraer_zip(ZIP_PATH, TEMP_DIR)
+    
+    reportar(30) # 30% - Clasificando
 
     raiz = obtener_carpeta_raiz(TEMP_DIR)
     data = clasificar_archivos(raiz)
@@ -340,17 +298,27 @@ def main():
     mantenimiento_tree = build_mantenimiento_tree(
         data["mantenimiento"]["imagenes"], raiz
     )
+    
+    pdf_tree = build_pdf_tree(
+        data["mantenimiento"]["pdfs"], raiz
+    )
 
     pdfs_mantenimiento_tree = agrupar_pdfs_por_categoria(
         data["mantenimiento"]["pdfs"], raiz
     )
 
     insert_tasks = []
+    
+    destino_base = gui_data.get("output_dir", "output") if gui_data else "output"
+
 
     # ============================================================
     # PRIMERA PASADA (Solo para recolectar el Índice)
     # ============================================================
     index = IndexCollector()
+    
+    if not os.path.exists("output"):
+        os.makedirs("output")
 
     # Archivo temporal para medir distancias y páginas
     c = canvas.Canvas("output/_tmp_recolector.pdf", pagesize=A4)
@@ -426,6 +394,16 @@ def main():
         index=index,  # Aquí se recolectan niveles 1, 2 y 3
         insert_tasks=None,  # En la primera pasada no necesitamos anotar tareas de reemplazo
     )
+    
+    # --- DOCUMENTACIÓN TÉCNICA (links PDFs de mantenimiento) ---
+    cursor_y = render_documentacion_links(
+        c,
+        PAGE_HEIGHT - 100,
+        pdf_tree,          # ← PDFs que estaban dentro de mantenimiento
+        project_data,
+        index=index        # ← IMPORTANTE para que aparezca en el índice
+    )
+
 
     # ---------------- ANEXOS ----------------
     # Aseguramos que los Anexos empiecen en página nueva
@@ -509,12 +487,22 @@ def main():
         index=None,  # Ya no recolectamos, ya tenemos index_items
         insert_tasks=insert_tasks,
     )
+    
+    # --- DOCUMENTACIÓN TÉCNICA (links PDFs de mantenimiento) ---
+    cursor_y = render_documentacion_links(
+        c,
+        PAGE_HEIGHT - 100,
+        pdf_tree,
+        project_data,
+        index=None
+    )
+
 
     # ---------------- ANEXOS (Listado con Links) ----------------
     c.showPage()
     draw_header_footer(c, c.getPageNumber(), project_data)
 
-    cursor_y = draw_section_title(c, "Anexos del Proyecto", PAGE_HEIGHT - 120)
+    cursor_y = draw_section_title(c, "Anexos del Proyecto", PAGE_HEIGHT - 100)
     cursor_y -= 20
 
     c.setFont("Helvetica", 12)
@@ -582,9 +570,19 @@ def main():
         else:
             # Página normal (Introducción, Ubicación, Mantenimiento, etc.)
             writer.add_page(page)
+            
+    # Aseguramos que la carpeta base exista
+    if not os.path.exists(destino_base):
+        os.makedirs(destino_base)
 
     # --- PREPARACIÓN DE CARPETAS ---
-    entrega_dir = "output/Reporte_Final_Entrega"
+    # Extraemos la ruta que eligió el usuario en la GUI
+    ruta_destino_usuario = gui_data.get("output_dir", "output") if gui_data else "output"
+
+    # Construimos las rutas finales en esa carpeta
+    entrega_dir = os.path.join(ruta_destino_usuario, "Reporte_Final_Entrega")
+    reportar(90) # 90% - Comprimiendo entrega
+    zip_entrega = os.path.join(ruta_destino_usuario, "Memoria_Tecnica_Final.zip")
     anexos_dir = os.path.join(entrega_dir, "anexos")
 
     if os.path.exists(entrega_dir):
@@ -605,7 +603,49 @@ def main():
     for pdf_anexo in data.get("anexos", []):
         if os.path.exists(pdf_anexo):
             shutil.copy(pdf_anexo, anexos_dir)
+            
+    # --- COPIAR DOCUMENTACIÓN DE MANTENIMIENTO ---
+    for seccion, subsecciones in pdf_tree.items():
+        for subseccion, grupos in subsecciones.items():
+            for grupo, categorias in grupos.items():
+                for categoria, pdfs in categorias.items():
+                    for pdf in pdfs:
+                        if os.path.exists(pdf):
+                            shutil.copy(pdf, anexos_dir)
+                            
+                            
+    with zipfile.ZipFile(zip_entrega, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        for root, dirs, files in os.walk(entrega_dir):
+            for file in files:
+                rel_path = os.path.relpath(os.path.join(root, file), entrega_dir)
+                zipf.write(os.path.join(root, file), rel_path)
 
+    # --- BLOQUE DE LIMPIEZA FINAL OPTIMIZADO ---
+    try:
+        # 1. Borrar la carpeta de trabajo donde se armó el reporte
+        if os.path.exists(entrega_dir):
+            shutil.rmtree(entrega_dir)
+            
+        # 2. Borrar la carpeta temp (donde se extrajo el ZIP original)
+        if os.path.exists(TEMP_DIR):
+            shutil.rmtree(TEMP_DIR)
+            
+        # 3. Borrar archivos PDF intermedios que ya están dentro del ZIP final
+        archivos_a_limpiar = [
+            "output/_tmp_recolector.pdf",
+            "output/mvp_imagenes.pdf"
+        ]
+        for archivo in archivos_a_limpiar:
+            if os.path.exists(archivo):
+                os.remove(archivo)
+                
+        print(f"🧹 Limpieza profunda completada. Solo queda el ZIP de entrega.")
+    except Exception as e:
+        print(f"⚠️ Nota: Algunos archivos temporales no pudieron borrarse: {e}")
+
+    reportar(100) # Indica a la interfaz que terminamos
+    return zip_entrega
+    
     print(f"✅ Proceso completo. Carpeta generada en: {entrega_dir}")
 
 

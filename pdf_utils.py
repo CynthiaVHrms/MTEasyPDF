@@ -2,6 +2,11 @@ import io
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.utils import ImageReader
 from PIL import Image
+from collections import defaultdict
+
+from file_engine import (
+    obtener_niveles,
+)
 
 PAGE_WIDTH, PAGE_HEIGHT = A4
 MARGIN = 40
@@ -144,3 +149,25 @@ def draw_images(canvas, images, per_page=4, start_y=None):
         idx += 1
 
     return remaining_images, used_height
+
+def build_pdf_tree(archivos, raiz):
+    tree = defaultdict(
+        lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+    )
+
+    for archivo in archivos:
+        if not archivo.lower().endswith(".pdf"):
+            continue
+
+        niveles = obtener_niveles(archivo, raiz)
+        tree[
+            niveles["seccion"]
+        ][
+            niveles["subseccion"]
+        ][
+            niveles["grupo"]
+        ][
+            niveles["categoria"]
+        ].append(archivo)
+
+    return tree
