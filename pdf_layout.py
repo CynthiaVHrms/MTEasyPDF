@@ -3,6 +3,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.colors import black
 from reportlab.platypus import Paragraph
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.utils import ImageReader
 
 from file_engine import (
     limpiar_nombre,
@@ -51,21 +52,34 @@ def draw_cover(canvas, data, project_data):
 
 def draw_header_footer(canvas, page_num, data):
     actual_p = canvas.getPageNumber()
-    logo_size = 40
+    max_height = 50  # El alto máximo que deseas
     padding = 20
 
-    # Logos
     for key in ["logo_sup_izq", "logo_sup_der", "logo_inf_izq", "logo_inf_der"]:
-        if data.get(key) and os.path.exists(data[key]):
-            # Posicionamiento simplificado para mantener el diseño original
-            if "sup_izq" in key: x, y = padding, PAGE_HEIGHT - logo_size - padding
-            elif "sup_der" in key: x, y = PAGE_WIDTH - logo_size - padding, PAGE_HEIGHT - logo_size - padding
-            elif "inf_izq" in key: x, y = padding, padding
-            else: x, y = PAGE_WIDTH - logo_size - padding, padding
+        path = data.get(key)
+        if path and os.path.exists(path):
+            # 1. Leer la imagen y obtener dimensiones originales
+            img = ImageReader(path)
+            orig_w, orig_h = img.getSize()
             
-            canvas.drawImage(data[key], x, y, width=logo_size, height=logo_size, mask="auto")
+            # 2. Calcular el ancho proporcional basado en el alto deseado (50)
+            aspect_ratio = orig_w / orig_h
+            calc_width = max_height * aspect_ratio
+            
+            # 3. Posicionamiento dinámico basado en el nuevo ancho
+            if "sup_izq" in key: 
+                x, y = padding, PAGE_HEIGHT - max_height - padding
+            elif "sup_der" in key: 
+                x, y = PAGE_WIDTH - calc_width - padding, PAGE_HEIGHT - max_height - padding
+            elif "inf_izq" in key: 
+                x, y = padding, padding
+            else: # inf_der
+                x, y = PAGE_WIDTH - calc_width - padding, padding
+            
+            # 4. Dibujar con las dimensiones calculadas
+            canvas.drawImage(img, x, y, width=calc_width, height=max_height, mask="auto")
 
-    # Si se requiere número, se dibuja
+    # Número de página
     if actual_p > 1: 
         canvas.setFont("Helvetica", 12)
         canvas.drawCentredString(PAGE_WIDTH / 2, 15, str(actual_p))
