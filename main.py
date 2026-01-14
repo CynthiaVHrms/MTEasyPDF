@@ -1,11 +1,14 @@
 import zipfile
 import os
+import re
 import sys
 import shutil
 from PyPDF2 import PdfMerger, PdfReader, PdfWriter
 from collections import defaultdict
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 
 from pdf_utils import (
     draw_images,
@@ -32,8 +35,6 @@ from file_engine import (
     build_mantenimiento_tree,
     agrupar_pdfs_por_categoria,
     calcular_paginas_indice,
-    limpiar_nombre,
-    obtener_niveles,
 )
 
 # ============================================================
@@ -46,6 +47,16 @@ TEMP_DIR = "temp"
 project_data = {}
 PAGE_WIDTH, PAGE_HEIGHT = A4
 
+try:
+    pdfmetrics.registerFont(TTFont('Arial', 'arial.ttf'))
+    pdfmetrics.registerFont(TTFont('Arial-Bold', 'arialbd.ttf'))
+    FUENTE_TEXTO = "Arial"
+    FUENTE_NEGRITA = "Arial-Bold"
+except:
+    # Si falla (ej. en Linux), regresamos a la estándar
+    FUENTE_TEXTO = "Helvetica"
+    FUENTE_NEGRITA = "Helvetica-Bold"
+    
 # ============================================================
 # FILE UTILS
 # ============================================================
@@ -463,7 +474,7 @@ def main(gui_data=None, callback_progreso=None):
         # Anotamos la página donde inicia el PDF
         insert_tasks.append((p_actual, pdf))
 
-        c.setFont("Helvetica-Bold", 14)
+        c.setFont(FUENTE_NEGRITA, 14)
         c.drawString(MARGIN, PAGE_HEIGHT - 120, f"Documento: {os.path.basename(pdf)}")
 
         # Avanzamos el contador para que la pág 10 sea realmente la 10
@@ -505,7 +516,7 @@ def main(gui_data=None, callback_progreso=None):
     cursor_y = draw_section_title(c, "Anexos del Proyecto", PAGE_HEIGHT - 100)
     cursor_y -= 20
 
-    c.setFont("Helvetica", 12)
+    c.setFont(FUENTE_TEXTO, 12)
     for pdf in data["anexos"]:
         nombre = os.path.basename(pdf)
         c.setFillColor("blue")

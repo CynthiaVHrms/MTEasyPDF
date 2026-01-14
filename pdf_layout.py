@@ -4,6 +4,8 @@ from reportlab.lib.colors import black
 from reportlab.platypus import Paragraph
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.utils import ImageReader
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 
 from file_engine import (
     limpiar_nombre,
@@ -11,6 +13,26 @@ from file_engine import (
 
 PAGE_WIDTH, PAGE_HEIGHT = A4
 MARGIN = 40
+
+try:
+    pdfmetrics.registerFont(TTFont('Arial', 'arial.ttf'))
+    pdfmetrics.registerFont(TTFont('Arial-Bold', 'arialbd.ttf'))
+    FUENTE_TEXTO = "Arial"
+    FUENTE_NEGRITA = "Arial-Bold"
+except:
+    # Si falla (ej. en Linux), regresamos a la estándar
+    FUENTE_TEXTO = "Helvetica"
+    FUENTE_NEGRITA = "Helvetica-Bold"
+    
+def limpiar_texto_usuario(texto):
+    if not texto:
+        return ""
+    # 1. Reemplaza saltos de línea y tabulaciones accidentales por espacios simples
+    texto = texto.replace('\t', ' ').replace('\r', '')
+    # 2. Elimina caracteres no deseados (mantiene letras, números y puntuación básica)
+    # Esto elimina los caracteres invisibles que causan los cuadritos
+    texto = "".join(c for c in texto if c.isprintable())
+    return texto.strip()
 
 def draw_cover(canvas, data, project_data):
     """
@@ -34,14 +56,17 @@ def draw_cover(canvas, data, project_data):
         )
 
     # Títulos
+    
+    # LIMPIEZA DE TEXTO PARA PORTADA
+    titulo_limpio = "".join(c for c in data.get("titulo", "") if c.isprintable()).strip()
+    info_limpia = "".join(c for c in data.get("info_extra", "") if c.isprintable()).strip()
+    
     canvas.setFillColorRGB(0, 0, 0)
-    canvas.setFont("Helvetica-Bold", 26)
-    canvas.drawCentredString(PAGE_WIDTH / 2, PAGE_HEIGHT - 200, data.get("titulo", ""))
-
-    canvas.setFont("Helvetica", 14)
-    canvas.drawCentredString(
-        PAGE_WIDTH / 2, PAGE_HEIGHT - 240, data.get("info_extra", "")
-    )
+    canvas.setFont(FUENTE_NEGRITA, 26)
+    canvas.drawCentredString(PAGE_WIDTH / 2, PAGE_HEIGHT - 200, titulo_limpio)
+    
+    canvas.setFont(FUENTE_TEXTO, 14)
+    canvas.drawCentredString(PAGE_WIDTH / 2, PAGE_HEIGHT - 240, info_limpia)
 
     # Dibuja logos, pero el número de página se omite internamente 
     # porque draw_header_footer detectará que es la página 1.
@@ -81,20 +106,20 @@ def draw_header_footer(canvas, page_num, data):
 
     # Número de página
     if actual_p > 1: 
-        canvas.setFont("Helvetica", 12)
+        canvas.setFont(FUENTE_TEXTO, 12)
         canvas.drawCentredString(PAGE_WIDTH / 2, 15, str(actual_p))
 
 def draw_section_title(canvas, title, y=None):
     if y is None:
         y = PAGE_HEIGHT - 100
     clean_title = title.lstrip("0123456789.-_ ").strip()
-    canvas.setFont("Helvetica-Bold", 18)
+    canvas.setFont(FUENTE_NEGRITA, 18)
     canvas.drawString(MARGIN, y, clean_title)
     canvas.line(MARGIN, y - 8, PAGE_WIDTH - MARGIN, y - 8)
     return y - 40
 
 def draw_subsection_title(canvas, text, y):
-    canvas.setFont("Helvetica-Bold", 14)
+    canvas.setFont(FUENTE_NEGRITA, 14)
     clean_text = text.lstrip("0123456789.-_ ").strip()
     canvas.drawString(MARGIN, y, clean_text)
     return y - 22
@@ -113,7 +138,7 @@ def nueva_pagina_con_titulo(canvas, project_data, titulo):
 
 def draw_index(canvas, index_items, project_data):
     cursor_y = PAGE_HEIGHT - 120
-    canvas.setFont("Helvetica-Bold", 20)
+    canvas.setFont(FUENTE_NEGRITA, 20)
     canvas.drawString(MARGIN, cursor_y, "Índice")
     canvas.line(MARGIN, cursor_y - 8, PAGE_WIDTH - MARGIN, cursor_y - 8)
     cursor_y -= 40
@@ -135,23 +160,23 @@ def draw_index(canvas, index_items, project_data):
             # IMPORTANTE: draw_header_footer ya usa canvas.getPageNumber() internamente
             draw_header_footer(canvas, None, project_data) 
             cursor_y = PAGE_HEIGHT - 120 # Reset de altura tras encabezado
-            canvas.setFont("Helvetica-Bold", 20)
+            canvas.setFont(FUENTE_NEGRITA, 20)
             canvas.drawString(MARGIN, cursor_y, "Índice") # Opcional: subtítulo
             cursor_y -= 40
 
-        canvas.setFont("Helvetica", font_size)
+        canvas.setFont(FUENTE_TEXTO, font_size)
         indent = (level - 1) * INDENT_STEP
         title = clean_title_idx(item["title"])
         page_text = str(item["page"])
 
-        text_width = canvas.stringWidth(title, "Helvetica", font_size)
-        page_val_width = canvas.stringWidth(page_text, "Helvetica", font_size)
+        text_width = canvas.stringWidth(title, FUENTE_TEXTO, font_size)
+        page_val_width = canvas.stringWidth(page_text, FUENTE_TEXTO, font_size)
         
         # Calculamos los puntos de forma que no se encimen con el número
         max_dots_x = PAGE_WIDTH - MARGIN - page_val_width - 5
         dots_area_width = max_dots_x - (MARGIN + indent + text_width + 5)
         
-        dot_char_width = canvas.stringWidth(".", "Helvetica", font_size)
+        dot_char_width = canvas.stringWidth(".", FUENTE_TEXTO, font_size)
         num_dots = int(dots_area_width / dot_char_width)
         dots = "." * max(num_dots, 0)
 
@@ -169,7 +194,7 @@ def draw_introduccion(canvas, texto, project_data, start_y=None):
     cursor_y = start_y
 
     # Título
-    canvas.setFont("Helvetica-Bold", 18)
+    canvas.setFont(FUENTE_NEGRITA, 18)
     canvas.drawString(MARGIN, cursor_y, "Introducción")
     canvas.line(MARGIN, cursor_y - 8, PAGE_WIDTH - MARGIN, cursor_y - 8)
     cursor_y -= 40
@@ -179,8 +204,8 @@ def draw_introduccion(canvas, texto, project_data, start_y=None):
     estilo_intro = ParagraphStyle(
         'IntroStyle',
         parent=styles['Normal'],
-        fontName='Helvetica',
-        fontSize=11,
+        fontName='Arial',
+        fontSize=12,
         leading=18,           # Mayor interlineado (antes 14)
         alignment=0,           # 0=Izquierda (mejor para listas), 4=Justificado
         leftIndent=30,         # Mayor margen a la izquierda (antes 0)
@@ -245,7 +270,7 @@ def render_documentacion_links(canvas, cursor_y, pdf_tree, project_data, index=N
         import re
         seccion_limpia = re.sub(r'^\d+\s*', '', seccion_aux).strip()
 
-        canvas.setFont("Helvetica-Bold", 12)
+        canvas.setFont(FUENTE_NEGRITA, 12)
         canvas.setFillColorRGB(0.2, 0.4, 0.6)
         canvas.drawString(MARGIN, cursor_y, f"Archivos de: {seccion_limpia}")
         canvas.setFillColor("black")
@@ -272,7 +297,7 @@ def render_documentacion_links(canvas, cursor_y, pdf_tree, project_data, index=N
                         origen = f"{sub_l} > {gru_l}" if grupo else sub_l
                         
                         # Dibujo del elemento
-                        canvas.setFont("Helvetica", 11)
+                        canvas.setFont(FUENTE_TEXTO, 11)
                         canvas.setFillColor("blue")
                         canvas.drawString(MARGIN + 20, cursor_y, f"• {nombre_archivo}")
                         

@@ -234,6 +234,24 @@ class MemoriaApp(QWidget):
             if not valor or valor.strip() == "":
                 QMessageBox.warning(self, "Faltan Datos", f"El campo '{nombre}' es obligatorio.")
                 return
+            
+        # Validar ZIP
+        if not self.zip_file.text().lower().endswith('.zip'):
+            QMessageBox.critical(self, "Archivo no válido", "El archivo de evidencias debe ser formato .ZIP")
+            return
+
+        # Validar Logos e Imágenes (Opcional si hay algo escrito)
+        imagenes = [
+            (self.portada_img.text(), "Portada"),
+            (self.logo_sup_izq.text(), "Logo Sup. Izq."),
+            (self.logo_sup_der.text(), "Logo Sup. Der.")
+        ]
+        
+        for path, nombre in imagenes:
+            if path and not path.lower().endswith(('.png', '.jpg', '.jpeg')):
+                QMessageBox.warning(self, "Imagen no válida", f"El archivo de {nombre} debe ser PNG o JPG.")
+                return
+        # ----------------------------------------
 
         # 2. Recolectar datos
         data = {

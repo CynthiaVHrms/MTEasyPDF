@@ -1,4 +1,5 @@
 import io
+import re
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.utils import ImageReader
 from PIL import Image
@@ -132,14 +133,16 @@ def draw_images(canvas, images, per_page=4, start_y=None):
         # Texto (nombre archivo)
         raw_name = img_path.split("\\")[-1].rsplit(".", 1)[0]
         filename = clean_filename(raw_name)
+        tiene_letras = bool(re.search('[a-zA-Z]', filename))
 
-        canvas.setFillColorRGB(0, 0, 0)
-        canvas.setFont("Helvetica", 7)
-        canvas.drawCentredString(
-            x,
-            (cell_center_y - max_h / 2) - TEXT_HEIGHT,
-            filename,
-        )
+        if tiene_letras:
+            canvas.setFillColorRGB(0, 0, 0)
+            canvas.setFont("Arial", 12)
+            canvas.drawCentredString(
+                x,
+                (cell_center_y - max_h / 2) - TEXT_HEIGHT,
+                filename,
+            )
 
         try:
             buf.close()
