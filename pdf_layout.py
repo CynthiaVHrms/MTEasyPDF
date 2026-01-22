@@ -1,4 +1,5 @@
 import os
+import re
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.colors import black
 from reportlab.platypus import Paragraph
@@ -205,7 +206,7 @@ def draw_introduccion(canvas, texto, project_data, start_y=None):
         'IntroStyle',
         parent=styles['Normal'],
         fontName='Arial',
-        fontSize=12,
+        fontSize=13,
         leading=18,           # Mayor interlineado (antes 14)
         alignment=0,           # 0=Izquierda (mejor para listas), 4=Justificado
         leftIndent=30,         # Mayor margen a la izquierda (antes 0)
@@ -238,82 +239,72 @@ def draw_introduccion(canvas, texto, project_data, start_y=None):
 
 
 def render_documentacion_links(canvas, cursor_y, pdf_tree, project_data, index=None):
+    # Forzamos nueva página al empezar la sección
     canvas.showPage()
     draw_header_footer(canvas, canvas.getPageNumber(), project_data)
     
-    # 1. Espacio superior compacto
     cursor_y = PAGE_HEIGHT - 100 
     cursor_y = draw_section_title(canvas, "Documentación Técnica", cursor_y)
     
     if index:
         index.add("Documentación Técnica", canvas.getPageNumber(), level=1)
     
-    # Pegamos el primer encabezado al título principal
-    cursor_y -= 5 
+    cursor_y -= 10 
 
     for seccion, subsecciones in pdf_tree.items():
-        # Verificación de contenido
-        tiene_pdfs = any(
-            pdf_list 
-            for sub in subsecciones.values() 
-            for grupo in sub.values() 
-            for pdf_list in grupo.values() 
-            if pdf_list
-        )
+        # Verificación de que existan PDFs reales en este nivel
+        tiene_pdfs = any(pdf_list for sub in subsecciones.values() for grupo in sub.values() for pdf_list in grupo.values() if pdf_list)
         
         if not tiene_pdfs:
             continue
         
-        # 2. Limpieza de nombre de sección (quitando números como "04 ")
-        seccion_aux = limpiar_nombre(seccion)
-        # Si limpiar_nombre no quita los números, lo hacemos manualmente:
-        import re
-        seccion_limpia = re.sub(r'^\d+\s*', '', seccion_aux).strip()
+        # Limpieza profunda de la sección
+        seccion_limpia = re.sub(r'^\d+\s*', '', limpiar_nombre(seccion)).replace('\r', '').replace('\n', '').strip()
 
         canvas.setFont(FUENTE_NEGRITA, 12)
         canvas.setFillColorRGB(0.2, 0.4, 0.6)
         canvas.drawString(MARGIN, cursor_y, f"Archivos de: {seccion_limpia}")
         canvas.setFillColor("black")
         
-        # 3. Más espacio entre el encabezado azul y la lista
         cursor_y -= 25 
 
         for subseccion, grupos in subsecciones.items():
             for grupo, categorias in grupos.items():
                 for categoria, pdfs in categorias.items():
                     for pdf_path in pdfs:
-                        # Control de salto de página
                         if cursor_y < 120:
                             canvas.showPage()
                             draw_header_footer(canvas, canvas.getPageNumber(), project_data)
                             cursor_y = PAGE_HEIGHT - 100
                         
-                        # DEFINICIÓN CLAVE
                         nombre_archivo = os.path.basename(pdf_path)
                         
-                        # Limpieza de textos de origen
-                        sub_l = re.sub(r'^\d+\s*', '', limpiar_nombre(subseccion)).strip()
-                        gru_l = re.sub(r'^\d+\s*', '', limpiar_nombre(grupo)).strip()
-                        origen = f"{sub_l} > {gru_l}" if grupo else sub_l
+                        # Limpieza de origen evitando cuadritos y manejando valores vacíos
+                        s_l = re.sub(r'^\d+\s*', '', limpiar_nombre(subseccion)).replace('\r', '').replace('\n', '').strip()
+                        g_l = re.sub(r'^\d+\s*', '', limpiar_nombre(grupo)).replace('\r', '').replace('\n', '').strip()
                         
-                        # Dibujo del elemento
+                        # Lógica de etiqueta de origen (para que no salga " > ")
+                        if s_l and g_l: origen = f"{s_l} > {g_l}"
+                        elif s_l: origen = s_l
+                        else: origen = g_l
+                        
+                        # Dibujo del link
                         canvas.setFont(FUENTE_TEXTO, 11)
                         canvas.setFillColor("blue")
                         canvas.drawString(MARGIN + 20, cursor_y, f"• {nombre_archivo}")
                         
+                        # Texto de origen en gris pequeño
                         canvas.setFont("Helvetica-Oblique", 8)
                         canvas.setFillColorRGB(0.5, 0.5, 0.5)
                         canvas.drawRightString(PAGE_WIDTH - MARGIN, cursor_y, origen)
                         
-                        # Link (nombre_archivo ya está definido arriba)
+                        # Área de clic del Hipervínculo
                         canvas.linkURL(f"anexos/{nombre_archivo}", 
                                        (MARGIN, cursor_y - 2, PAGE_WIDTH - MARGIN, cursor_y + 12))
                         
                         canvas.setFillColor("black")
-                        # 4. Espaciado entre links aumentado
                         cursor_y -= 22 
         
-        # Espacio tras terminar una sección completa
-        cursor_y -= 10
+        cursor_y -= 15 # Espacio entre bloques de secciones
         
     return cursor_y

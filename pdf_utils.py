@@ -153,7 +153,7 @@ def draw_images(canvas, images, per_page=4, start_y=None):
 
     return remaining_images, used_height
 
-def build_pdf_tree(archivos, raiz):
+def build_pdf_tree(archivos, raiz, usa_ubicacion=True):
     tree = defaultdict(
         lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
     )

@@ -3,6 +3,7 @@ import os
 import re
 import sys
 import shutil
+import unicodedata
 from PyPDF2 import PdfMerger, PdfReader, PdfWriter
 from collections import defaultdict
 from reportlab.pdfgen import canvas
@@ -93,12 +94,12 @@ def render_mantenimiento(
     project_data,
     index=None,
     insert_tasks=None,
+    usa_ubicacion=True,
 ):
     MIN_BOTTOM = 120
     TITLE_GAP = 2
     hubo_contenido = False
 
-    # Convertimos a listas para saber el total y usar índices
     secciones_list = list(tree.items())
     total_secciones = len(secciones_list)
 
@@ -112,7 +113,9 @@ def render_mantenimiento(
         total_subs = len(subsecciones_list)
 
         for i_sub, (subseccion, grupos) in enumerate(subsecciones_list):
-            if subseccion:
+            tiene_subseccion = subseccion != "__SIN_UBICACION__"
+
+            if tiene_subseccion and usa_ubicacion:
                 if cursor_y < (MIN_BOTTOM + 40):
                     canvas.showPage()
                     draw_header_footer(canvas, canvas.getPageNumber(), project_data)
@@ -146,6 +149,9 @@ def render_mantenimiento(
                 for i_cat, (categoria, imagenes_nativas) in enumerate(categorias_list):
                     imagenes_categoria = [f for f in imagenes_nativas if f.lower().endswith((".jpg", ".jpeg", ".png"))]
                     
+                    if not imagenes_categoria:
+                        continue
+
                     if categoria:
                         if cursor_y < (MIN_BOTTOM + 40):
                             canvas.showPage()
@@ -156,8 +162,24 @@ def render_mantenimiento(
                         cursor_y = draw_subsection_title(canvas, categoria, cursor_y)
                         cursor_y -= TITLE_GAP
 
-                    nombre = (categoria or "").lower()
-                    layout = 2 if ("pantalla" in nombre or "pruebas" in nombre) else 4
+                    # --- ESTA ES LA MEJORA DEFINITIVA ---
+                    # Concatenamos TODOS los niveles disponibles para no perder la palabra clave
+                    niveles_texto = [
+                        str(seccion or ""),
+                        str(subseccion or ""),
+                        str(grupo or ""),
+                        str(categoria or "")
+                    ]
+                    txt_busqueda = " ".join(niveles_texto).lower()
+                    
+                    print(f"DEBUG: Buscando en '{txt_busqueda}'")
+                    
+                    if "pantalla" in txt_busqueda or "pruebas" in txt_busqueda:
+                        layout = 2
+                    else:
+                        layout = 4
+                        
+                    print(f"DEBUG -> Texto: {txt_busqueda} | RESULTADO: Layout {layout}")
                     
                     # Dibujamos imágenes
                     imagenes_temp = imagenes_categoria[:]
@@ -174,8 +196,7 @@ def render_mantenimiento(
                         cursor_y -= used_height
                         hubo_contenido = True
 
-                    # --- EL SALTO DE PÁGINA INTELIGENTE ---
-                    # Solo hacemos showPage si NO es la última categoría de la última subsección del último grupo
+                    # --- SALTO DE PÁGINA INTELIGENTE ---
                     es_el_final_absoluto = (
                         (i_sec == total_secciones - 1) and 
                         (i_sub == total_subs - 1) and 
@@ -194,7 +215,7 @@ def render_mantenimiento(
 
 
 def build_pdf(
-    filename, with_index, data, mantenimiento_tree, index_items=None, index=None
+    filename, with_index, data, mantenimiento_tree, index_items=None, index=None, usa_ubicacion=True
 ):
     # pageCompression=1 es genial para que no pese tanto
     c = canvas.Canvas(filename, pagesize=A4, pageCompression=1)
@@ -231,32 +252,33 @@ def build_pdf(
         # draw_index ya termina con un showPage() interno
 
     # -------- UBICACIÓN --------
-    imagenes_restantes = data["ubicacion"][:]
+    if usa_ubicacion and data.get("ubicacion"):
+        imagenes_restantes = data["ubicacion"][:]
 
-    while imagenes_restantes:
-        # Dibujamos encabezado de la página actual de ubicación
-        draw_header_footer(c, c.getPageNumber(), project_data)
+        while imagenes_restantes:
+            # Dibujamos encabezado de la página actual de ubicación
+            draw_header_footer(c, c.getPageNumber(), project_data)
 
-        cursor_y = draw_section_title(c, "Ubicación")
-        cursor_y -= 20
+            cursor_y = draw_section_title(c, "Ubicación")
+            cursor_y -= 20
 
-        # Si quieres que la ubicación aparezca en el índice:
-        if index:
-            index.add("Ubicación", c.getPageNumber(), level=1)
+            # Si quieres que la ubicación aparezca en el índice:
+            if index:
+                index.add("Ubicación", c.getPageNumber(), level=1)
 
-        imagenes_restantes, used_height = draw_images(
-            c,
-            imagenes_restantes,
-            per_page=2,
-            start_y=cursor_y,
-        )
+            imagenes_restantes, used_height = draw_images(
+                c,
+                imagenes_restantes,
+                per_page=2,
+                start_y=cursor_y,
+            )
 
-        cursor_y -= used_height
+            cursor_y -= used_height
 
-        # Si quedan más imágenes de ubicación, saltamos de página
-        if imagenes_restantes:
-            c.showPage()
-            cursor_y = PAGE_HEIGHT - 100
+            # Si quedan más imágenes de ubicación, saltamos de página
+            if imagenes_restantes:
+                c.showPage()
+                cursor_y = PAGE_HEIGHT - 100
 
     # -------- MANTENIMIENTO --------
     # MODIFICADO: Solo enviamos y recibimos cursor_y
@@ -288,6 +310,7 @@ def main(gui_data=None, callback_progreso=None):
     if gui_data:
         project_data.update(gui_data)
         ZIP_PATH = gui_data.get("zip_path")
+        usa_ubicacion = gui_data.get("usa_ubicacion", True)
     
     # Validación estricta
     if not project_data.get("titulo") or not ZIP_PATH:
@@ -307,15 +330,15 @@ def main(gui_data=None, callback_progreso=None):
     data = clasificar_archivos(raiz)
 
     mantenimiento_tree = build_mantenimiento_tree(
-        data["mantenimiento"]["imagenes"], raiz
+        data["mantenimiento"]["imagenes"], raiz, usa_ubicacion=usa_ubicacion
     )
     
     pdf_tree = build_pdf_tree(
-        data["mantenimiento"]["pdfs"], raiz
+        data["mantenimiento"]["pdfs"], raiz, usa_ubicacion=usa_ubicacion
     )
 
     pdfs_mantenimiento_tree = agrupar_pdfs_por_categoria(
-        data["mantenimiento"]["pdfs"], raiz
+        data["mantenimiento"]["pdfs"], raiz, usa_ubicacion=usa_ubicacion
     )
 
     insert_tasks = []
@@ -346,33 +369,35 @@ def main(gui_data=None, callback_progreso=None):
     c.showPage()
     
     # --- Simulación de espacio para el Índice ---
-    num_paginas_idx = calcular_paginas_indice(mantenimiento_tree, data)
+    num_paginas_idx = calcular_paginas_indice(mantenimiento_tree, data, usa_ubicacion=usa_ubicacion)
     for _ in range(num_paginas_idx):
-        c.showPage()
+        if usa_ubicacion:
+            c.showPage()
 
     # ---------------- UBICACIÓN ----------------
-    index.add("Ubicación", c.getPageNumber(), level=1)
-    imagenes_restantes = data["ubicacion"][:]
+    if usa_ubicacion and data.get("ubicacion"):
+        index.add("Ubicación", c.getPageNumber(), level=1)
+        imagenes_restantes = data["ubicacion"][:]
 
-    while imagenes_restantes:
-        draw_header_footer(c, c.getPageNumber(), project_data)
-        cursor_y = draw_section_title(c, "Ubicación")
-        cursor_y -= 20
+        while imagenes_restantes:
+            draw_header_footer(c, c.getPageNumber(), project_data)
+            cursor_y = draw_section_title(c, "Ubicación")
+            cursor_y -= 20
 
-        # Mantenemos tu lógica de 1 o 2 imágenes
-        per_page = 1 if len(imagenes_restantes) == 1 else 2
+            # Mantenemos tu lógica de 1 o 2 imágenes
+            per_page = 1 if len(imagenes_restantes) == 1 else 2
 
-        imagenes_restantes, used_height = draw_images(
-            c,
-            imagenes_restantes,
-            per_page=per_page,
-            start_y=cursor_y,
-        )
-        cursor_y -= used_height
+            imagenes_restantes, used_height = draw_images(
+                c,
+                imagenes_restantes,
+                per_page=per_page,
+                start_y=cursor_y,
+            )
+            cursor_y -= used_height
 
-        if imagenes_restantes:
-            c.showPage()
-            cursor_y = PAGE_HEIGHT - 100
+            if imagenes_restantes:
+                c.showPage()
+                cursor_y = PAGE_HEIGHT - 100
 
 
     # ---------------- INVENTARIO ----------------
@@ -410,9 +435,9 @@ def main(gui_data=None, callback_progreso=None):
     cursor_y = render_documentacion_links(
         c,
         PAGE_HEIGHT - 100,
-        pdf_tree,          # ← PDFs que estaban dentro de mantenimiento
+        pdfs_mantenimiento_tree,  # <--- CAMBIAR pdf_tree POR pdfs_mantenimiento_tree
         project_data,
-        index=index        # ← IMPORTANTE para que aparezca en el índice
+        index=index        
     )
 
 
@@ -451,42 +476,51 @@ def main(gui_data=None, callback_progreso=None):
     # Al salir de draw_index ya se hizo un showPage()
 
     # ---------------- UBICACIÓN ----------------
-    imagenes_restantes = data["ubicacion"][:]
-    while imagenes_restantes:
-        draw_header_footer(c, c.getPageNumber(), project_data)
-        cursor_y = draw_section_title(c, "Ubicación")
-        cursor_y -= 20
+    if usa_ubicacion and data.get("ubicacion"):
+        imagenes_restantes = data["ubicacion"][:]
+        while imagenes_restantes:
+            draw_header_footer(c, c.getPageNumber(), project_data)
+            cursor_y = draw_section_title(c, "Ubicación")
+            cursor_y -= 20
 
-        per_page = 1 if len(imagenes_restantes) == 1 else 2
-        imagenes_restantes, used_height = draw_images(
-            c, imagenes_restantes, per_page=per_page, start_y=cursor_y
-        )
+            per_page = 1 if len(imagenes_restantes) == 1 else 2
+            imagenes_restantes, used_height = draw_images(
+                c, imagenes_restantes, per_page=per_page, start_y=cursor_y
+            )
 
-        if imagenes_restantes:
-            c.showPage()
+            if imagenes_restantes:
+                c.showPage()
+        
+        c.showPage() # Necesario para cuando se necesita más de una hoja 
 
     # ---------------- INVENTARIO (Segunda Pasada) ----------------
-    for pdf in data["inventario"]:
-        c.showPage()
+    for i, pdf in enumerate(data["inventario"]):
+
+        # 👉 A partir del segundo PDF, iniciamos página nueva
+        if i > 0:
+            c.showPage()
+
         p_actual = c.getPageNumber()
         draw_header_footer(c, p_actual, project_data)
 
-        # Anotamos la página donde inicia el PDF
+        # Anotamos la página donde inicia el PDF real
         insert_tasks.append((p_actual, pdf))
 
         c.setFont(FUENTE_NEGRITA, 14)
-        c.drawString(MARGIN, PAGE_HEIGHT - 120, f"Documento: {os.path.basename(pdf)}")
+        c.drawString(
+            MARGIN,
+            PAGE_HEIGHT - 120,
+            f"Documento: {os.path.basename(pdf)}"
+        )
 
-        # Avanzamos el contador para que la pág 10 sea realmente la 10
+        # Simulamos las páginas restantes del PDF
         if os.path.exists(pdf):
             reader_temp = PdfReader(pdf)
             paginas_pdf = len(reader_temp.pages)
 
-            # Si el PDF tiene más de 1 página, creamos "huecos" en el canvas
             for _ in range(paginas_pdf - 1):
                 c.showPage()
-                # Opcional: anotar que esta página es de relleno
-                # (aunque la lógica del writer que pondremos abajo lo detectará solo)
+
 
     # ---------------- MANTENIMIENTO ----------------
     render_mantenimiento(
@@ -503,7 +537,7 @@ def main(gui_data=None, callback_progreso=None):
     cursor_y = render_documentacion_links(
         c,
         PAGE_HEIGHT - 100,
-        pdf_tree,
+        pdfs_mantenimiento_tree,  # <--- CAMBIAR pdf_tree POR pdfs_mantenimiento_tree
         project_data,
         index=None
     )

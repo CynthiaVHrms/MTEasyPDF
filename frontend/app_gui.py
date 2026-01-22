@@ -5,7 +5,7 @@ import sys
 import os
 
 # Configuración de rutas para PyInstaller
-if getattr(sys, 'frozen', False):
+if getattr(sys, "frozen", False):
     # Si es el ejecutable (.exe)
     base_path = sys._MEIPASS
 else:
@@ -40,7 +40,7 @@ from PyQt5.QtWidgets import (
     QHBoxLayout,
     QMessageBox,
     QScrollArea,
-    QSizePolicy,
+    QCheckBox,
     QProgressBar,
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
@@ -116,6 +116,37 @@ class MemoriaApp(QWidget):
         )
         form_layout.addLayout(self._row("Introducción *", self.introduccion))
 
+        # --- CASILLA DE UBICACIÓN ---
+        self.check_ubicacion = QCheckBox(
+            "El proyecto incluye carpetas de Ubicación o Sembrado de sitios"
+        )
+        self.check_ubicacion.setChecked(True)  # Activada por defecto
+        self.check_ubicacion.setStyleSheet(
+            """
+            QCheckBox {
+                font-size: 15px;         
+                font-weight: bold;
+                color: #B0FBFF;          
+                margin-top: 20px;        
+                margin-bottom: 10px;
+                spacing: 10px;           
+            }
+            QCheckBox::indicator {
+                width: 20px;             
+                height: 20px;
+                border: 2px solid #0FF0FC;
+                border-radius: 4px;
+                background: #1B263B;
+            }
+            QCheckBox::indicator:checked {
+                background: #0FF0FC;     
+                image: url(check.png);   
+            }
+        """
+        )
+        form_layout.addWidget(self.check_ubicacion)
+        # ---------------------------------------------
+
         form_layout.addWidget(self.section_title("Archivos y Logos"))
         form_layout.addLayout(
             self._file_row("Archivo ZIP de Evidencias *", self.zip_file)
@@ -186,18 +217,18 @@ class MemoriaApp(QWidget):
         path, _ = QFileDialog.getOpenFileName(self, "Seleccionar archivo")
         if path:
             target.setText(path)
-            
+
     def _directory_row(self, label, field):
         """Crea una fila con etiqueta, campo de texto y botón para seleccionar carpetas."""
         layout_v = QVBoxLayout()
         layout_v.addWidget(QLabel(label))
         layout_h = QHBoxLayout()
         layout_h.addWidget(field)
-        
+
         btn = QPushButton("Seleccionar")
         btn.setObjectName("SecondaryButton")
         btn.clicked.connect(lambda: self.select_directory(field))
-        
+
         layout_h.addWidget(btn)
         layout_v.addLayout(layout_h)
         return layout_v
@@ -227,29 +258,39 @@ class MemoriaApp(QWidget):
             (self.zip_file.text(), "ZIP de Evidencias"),
             (self.logo_sup_izq.text(), "Logo Superior Izquierdo"),
             (self.logo_sup_der.text(), "Logo Superior Derecho"),
-            (self.output_folder.text(), "Carpeta de Salida")
+            (self.output_folder.text(), "Carpeta de Salida"),
         ]
 
         for valor, nombre in obligatorios:
             if not valor or valor.strip() == "":
-                QMessageBox.warning(self, "Faltan Datos", f"El campo '{nombre}' es obligatorio.")
+                QMessageBox.warning(
+                    self, "Faltan Datos", f"El campo '{nombre}' es obligatorio."
+                )
                 return
-            
+
         # Validar ZIP
-        if not self.zip_file.text().lower().endswith('.zip'):
-            QMessageBox.critical(self, "Archivo no válido", "El archivo de evidencias debe ser formato .ZIP")
+        if not self.zip_file.text().lower().endswith(".zip"):
+            QMessageBox.critical(
+                self,
+                "Archivo no válido",
+                "El archivo de evidencias debe ser formato .ZIP",
+            )
             return
 
         # Validar Logos e Imágenes (Opcional si hay algo escrito)
         imagenes = [
             (self.portada_img.text(), "Portada"),
             (self.logo_sup_izq.text(), "Logo Sup. Izq."),
-            (self.logo_sup_der.text(), "Logo Sup. Der.")
+            (self.logo_sup_der.text(), "Logo Sup. Der."),
         ]
-        
+
         for path, nombre in imagenes:
-            if path and not path.lower().endswith(('.png', '.jpg', '.jpeg')):
-                QMessageBox.warning(self, "Imagen no válida", f"El archivo de {nombre} debe ser PNG o JPG.")
+            if path and not path.lower().endswith((".png", ".jpg", ".jpeg")):
+                QMessageBox.warning(
+                    self,
+                    "Imagen no válida",
+                    f"El archivo de {nombre} debe ser PNG o JPG.",
+                )
                 return
         # ----------------------------------------
 
@@ -265,6 +306,7 @@ class MemoriaApp(QWidget):
             "logo_sup_der": self.logo_sup_der.text(),
             "logo_inf_izq": self.logo_inf_izq.text(),
             "logo_inf_der": self.logo_inf_der.text(),
+            "usa_ubicacion": self.check_ubicacion.isChecked(),
         }
 
         self.btn_generar.setEnabled(False)
