@@ -1,4 +1,5 @@
-import os
+import os 
+import re
 import zipfile
 import shutil
 from collections import defaultdict
@@ -29,16 +30,34 @@ def obtener_carpeta_raiz(base_path):
 def limpiar_nombre(nombre):
     return nombre.replace("_", " ").replace("-", " ").replace(".", "").strip()
 
+def limpiar_nombre_completo(nombre):
+    # Primero quitamos numeración inicial tipo "01 ", "01. ", "01-" 
+    nombre_limpio = re.sub(r'^\d+[\s.\-_]*', '', nombre)
+    # Luego aplicamos tu limpieza de caracteres
+    return nombre_limpio.replace("_", " ").replace("-", " ").replace(".", "").strip()
+
 
 def obtener_niveles(path, raiz):
     rel = os.path.relpath(path, raiz)
     partes = rel.split(os.sep)
-    return {
-        "seccion": limpiar_nombre(partes[0]) if len(partes) > 0 else None,
-        "subseccion": limpiar_nombre(partes[1]) if len(partes) > 1 else None,
-        "grupo": limpiar_nombre(partes[2]) if len(partes) > 2 else None,
-        "categoria": limpiar_nombre(partes[-2]) if len(partes) >= 2 else None,
+    
+    # Estructura base
+    res = {
+        "seccion": partes[0] if len(partes) > 0 else "Mantenimiento",
+        "subseccion": partes[1] if len(partes) > 1 else "General",
+        "grupo": partes[2] if len(partes) > 2 else "General",
+        "categoria": "" # Por defecto vacío para que no diga "Fotos"
     }
+
+    # Si hay nivel 4 o más
+    if len(partes) >= 4:
+        # Extraemos todas las carpetas desde la 4ta (partes[3]) hasta la última carpeta (partes[-2])
+        # Limpiamos cada una individualmente para quitar números
+        extras = [limpiar_nombre_completo(p) for p in partes[3:-1]]
+        # Las unimos con un separador limpio
+        res["categoria"] = " - ".join(extras)
+        
+    return res
 
 
 def clasificar_archivos(base_path):
@@ -90,13 +109,7 @@ def clasificar_archivos(base_path):
 
 
 def build_mantenimiento_tree(imagenes, raiz, usa_ubicacion=True):
-    tree = defaultdict(
-        lambda: defaultdict(
-            lambda: defaultdict(
-                lambda: defaultdict(list)
-            )
-        )
-    )
+    tree = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(list))))
 
     for img in imagenes:
         if not img.lower().endswith((".jpg", ".jpeg", ".png")):
@@ -104,22 +117,19 @@ def build_mantenimiento_tree(imagenes, raiz, usa_ubicacion=True):
 
         niveles = obtener_niveles(img, raiz)
 
-        seccion = niveles.get("seccion", "Mantenimiento")
-
+        # Extraemos los niveles ya procesados
+        seccion = limpiar_nombre(niveles.get("seccion"))
+        
         if usa_ubicacion:
-            subseccion = niveles.get("subseccion", "Ubicación")
-            grupo = niveles.get("grupo", "General")
-            categoria = niveles.get("categoria", "Fotos")
+            subseccion = limpiar_nombre(niveles.get("subseccion", "Ubicación"))
+            grupo = limpiar_nombre(niveles.get("grupo", "General"))
         else:
-            subseccion = NO_SUBSECCION
-            grupo = niveles.get("subseccion", "General")
+            # Si no hay ubicación, mantenemos la jerarquía pero bajo nombres genéricos
+            subseccion = limpiar_nombre(niveles.get("subseccion", "General"))
+            grupo = limpiar_nombre(niveles.get("grupo", "General"))
 
-            # La categoría debe venir SOLO del último nivel real,
-            # limpiando numeración tipo "01 ", "02 ", etc.
-            categoria_raw = niveles.get("categoria") or niveles.get("grupo") or "Fotos"
-
-            categoria = limpiar_nombre(categoria_raw)
-
+        # La categoría ya viene con el 5to nivel unido si existía
+        categoria = limpiar_nombre(niveles.get("categoria", "Fotos"))
 
         tree[seccion][subseccion][grupo][categoria].append(img)
 

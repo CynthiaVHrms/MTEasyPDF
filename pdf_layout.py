@@ -120,6 +120,7 @@ def draw_section_title(canvas, title, y=None):
     return y - 40
 
 def draw_subsection_title(canvas, text, y):
+    canvas.setFillColorRGB(0, 0, 0)
     canvas.setFont(FUENTE_NEGRITA, 14)
     clean_text = text.lstrip("0123456789.-_ ").strip()
     canvas.drawString(MARGIN, y, clean_text)

@@ -13,8 +13,10 @@ from reportlab.pdfbase.ttfonts import TTFont
 
 from pdf_utils import (
     draw_images,
+    draw_images_by_rows,
     build_pdf_tree,
     MARGIN,
+    TOP_SAFE_MARGIN,
 )
 
 from pdf_layout import (
@@ -25,7 +27,7 @@ from pdf_layout import (
     nueva_pagina_con_titulo,
     draw_index,
     draw_introduccion,
-    render_documentacion_links
+    render_documentacion_links,
 )
 
 from file_engine import (
@@ -47,17 +49,21 @@ ZIP_PATH = "ejemplo.zip"
 TEMP_DIR = "temp"
 project_data = {}
 PAGE_WIDTH, PAGE_HEIGHT = A4
+TEXT_HEIGHT = 14
+TITLE_HEIGHT = 22
+MIN_SPACE_AFTER_TITLE = 150
 
 try:
-    pdfmetrics.registerFont(TTFont('Arial', 'arial.ttf'))
-    pdfmetrics.registerFont(TTFont('Arial-Bold', 'arialbd.ttf'))
+    pdfmetrics.registerFont(TTFont("Arial", "arial.ttf"))
+    pdfmetrics.registerFont(TTFont("Arial-Bold", "arialbd.ttf"))
     FUENTE_TEXTO = "Arial"
     FUENTE_NEGRITA = "Arial-Bold"
 except:
     # Si falla (ej. en Linux), regresamos a la estándar
     FUENTE_TEXTO = "Helvetica"
     FUENTE_NEGRITA = "Helvetica-Bold"
-    
+
+
 # ============================================================
 # FILE UTILS
 # ============================================================
@@ -77,13 +83,21 @@ class IndexCollector:
 # ============================================================
 
 
-def imprimir_resumen(data):
-    print("\n📍 Ubicación:", len(data["ubicacion"]), "imágenes")
-    print("📊 Inventario:", len(data["inventario"]), "archivo(s)")
-    print("🛠️ Mantenimiento:")
-    print("   - imágenes:", len(data["mantenimiento"]["imagenes"]))
-    print("   - pdfs:", len(data["mantenimiento"]["pdfs"]))
-    print("📎 Anexos:", len(data["anexos"]), "pdf(s)")
+def calcular_alto_imagenes(num_imagenes, layout):
+    if layout == 4:
+        imgs_por_fila = 4
+        max_h = 220
+    else:
+        imgs_por_fila = 2
+        max_h = 250
+
+    filas = (num_imagenes + imgs_por_fila - 1) // imgs_por_fila
+
+    row_gap = max_h + TEXT_HEIGHT + 48
+    top_padding = 10
+    bottom_padding = 20
+
+    return top_padding + (filas * row_gap) + bottom_padding
 
 
 def render_mantenimiento(
@@ -95,133 +109,152 @@ def render_mantenimiento(
     index=None,
     insert_tasks=None,
     usa_ubicacion=True,
+    callback_progreso=None,
 ):
     MIN_BOTTOM = 120
     TITLE_GAP = 2
-    hubo_contenido = False
+    imagenes_procesadas_ref = [0]
+    print("🔥 render_mantenimiento ejecutándose")
 
-    secciones_list = list(tree.items())
-    total_secciones = len(secciones_list)
+    # ---- CONTAR TOTAL DE IMÁGENES ----
+    total_imagenes = 0
+    for subsecciones in tree.values():
+        for grupos in subsecciones.values():
+            for categorias in grupos.values():
+                for imagenes in categorias.values():
+                    total_imagenes += len(
+                        [
+                            f
+                            for f in imagenes
+                            if f.lower().endswith((".jpg", ".jpeg", ".png"))
+                        ]
+                    )
 
-    for i_sec, (seccion, subsecciones) in enumerate(secciones_list):
+    imagenes_procesadas = 0
+
+    for i_sec, (seccion, subsecciones) in enumerate(tree.items()):
+        # Nueva sección siempre hoja nueva (ya lo hace tu función)
         cursor_y = nueva_pagina_con_titulo(canvas, project_data, seccion)
         if index:
             index.add(seccion, canvas.getPageNumber(), level=1)
-        cursor_y -= TITLE_GAP
 
-        subsecciones_list = list(subsecciones.items())
-        total_subs = len(subsecciones_list)
+        for i_sub, (subseccion, grupos) in enumerate(subsecciones.items()):
+            # --- REGLA: SALTO EN SUBSECCIÓN ---
+            if usa_ubicacion and i_sub > 0:
+                canvas.showPage()
+                draw_header_footer(canvas, canvas.getPageNumber(), project_data)
+                cursor_y = draw_section_title(canvas, seccion, TOP_SAFE_MARGIN)
 
-        for i_sub, (subseccion, grupos) in enumerate(subsecciones_list):
-            tiene_subseccion = subseccion != "__SIN_UBICACION__"
-
-            if tiene_subseccion and usa_ubicacion:
-                if cursor_y < (MIN_BOTTOM + 40):
-                    canvas.showPage()
-                    draw_header_footer(canvas, canvas.getPageNumber(), project_data)
-                    cursor_y = PAGE_HEIGHT - 100
-                    cursor_y = draw_section_title(canvas, seccion, cursor_y)
-
+            if subseccion != "__SIN_UBICACION__" and usa_ubicacion:
                 cursor_y = draw_subsection_title(canvas, subseccion, cursor_y)
                 if index:
                     index.add(subseccion, canvas.getPageNumber(), level=2)
-                cursor_y -= TITLE_GAP
 
-            grupos_list = list(grupos.items())
-            total_grupos = len(grupos_list)
-
-            for i_gru, (grupo, categorias) in enumerate(grupos_list):
-                if grupo:
-                    if cursor_y < (MIN_BOTTOM + 40):
+            for i_gru, (grupo, categorias) in enumerate(grupos.items()):
+                # --- REGLA: SALTO EN GRUPO (solo si no hay ubicación) ---
+                if not usa_ubicacion:
+                    if not (i_sub == 0 and i_gru == 0):
                         canvas.showPage()
                         draw_header_footer(canvas, canvas.getPageNumber(), project_data)
-                        cursor_y = PAGE_HEIGHT - 100
-                        cursor_y = draw_section_title(canvas, seccion, cursor_y)
+                        cursor_y = draw_section_title(canvas, seccion, TOP_SAFE_MARGIN)
 
+                if cursor_y < (MIN_BOTTOM + TITLE_HEIGHT + MIN_SPACE_AFTER_TITLE):
+                    canvas.showPage()
+                    draw_header_footer(canvas, canvas.getPageNumber(), project_data)
+                    cursor_y = draw_section_title(canvas, seccion, TOP_SAFE_MARGIN)
+
+                if grupo:
                     cursor_y = draw_subsection_title(canvas, grupo, cursor_y)
                     if index:
                         index.add(grupo, canvas.getPageNumber(), level=3)
-                    cursor_y -= TITLE_GAP
 
-                categorias_list = list(categorias.items())
-                total_cats = len(categorias_list)
-
-                for i_cat, (categoria, imagenes_nativas) in enumerate(categorias_list):
-                    imagenes_categoria = [f for f in imagenes_nativas if f.lower().endswith((".jpg", ".jpeg", ".png"))]
-                    
-                    if not imagenes_categoria:
+                for i_cat, (categoria, imagenes_nativas) in enumerate(
+                    categorias.items()
+                ):
+                    imgs_cat = [
+                        f
+                        for f in imagenes_nativas
+                        if f.lower().endswith((".jpg", ".jpeg", ".png"))
+                    ]
+                    if not imgs_cat:
                         continue
 
                     if categoria:
-                        if cursor_y < (MIN_BOTTOM + 40):
+                        # --- DETECCIÓN DE LAYOUT ---
+                        niveles_texto = [
+                            str(seccion),
+                            str(subseccion),
+                            str(grupo),
+                            str(categoria),
+                        ]
+                        txt_busqueda = " ".join(niveles_texto).lower()
+
+                        is_full_width = (
+                            "pantalla" in txt_busqueda or "pruebas" in txt_busqueda
+                        )
+
+                        if is_full_width:
+                            max_h = 240
+                        else:
+                            max_h = 220
+
+                        row_gap = max_h + TEXT_HEIGHT + 30
+                        bottom_limit = 80  # MISMO que draw_images_by_rows
+
+                        altura_necesaria = 22 + row_gap  # título + una fila real
+
+                        if cursor_y - altura_necesaria < bottom_limit:
                             canvas.showPage()
                             draw_header_footer(canvas, canvas.getPageNumber(), project_data)
-                            cursor_y = PAGE_HEIGHT - 100
-                            cursor_y = draw_section_title(canvas, seccion, cursor_y)
+                            cursor_y = draw_section_title(canvas, seccion, TOP_SAFE_MARGIN)
 
                         cursor_y = draw_subsection_title(canvas, categoria, cursor_y)
-                        cursor_y -= TITLE_GAP
 
-                    # --- ESTA ES LA MEJORA DEFINITIVA ---
-                    # Concatenamos TODOS los niveles disponibles para no perder la palabra clave
+                    # --- DETECCIÓN DE LAYOUT ---
                     niveles_texto = [
-                        str(seccion or ""),
-                        str(subseccion or ""),
-                        str(grupo or ""),
-                        str(categoria or "")
+                        str(seccion),
+                        str(subseccion),
+                        str(grupo),
+                        str(categoria),
                     ]
                     txt_busqueda = " ".join(niveles_texto).lower()
-                    
-                    print(f"DEBUG: Buscando en '{txt_busqueda}'")
-                    
-                    if "pantalla" in txt_busqueda or "pruebas" in txt_busqueda:
-                        layout = 2
-                    else:
-                        layout = 4
-                        
-                    print(f"DEBUG -> Texto: {txt_busqueda} | RESULTADO: Layout {layout}")
-                    
-                    # Dibujamos imágenes
-                    imagenes_temp = imagenes_categoria[:]
-                    while imagenes_temp:
-                        if cursor_y < (MIN_BOTTOM + 250):
-                            canvas.showPage()
-                            draw_header_footer(canvas, canvas.getPageNumber(), project_data)
-                            cursor_y = PAGE_HEIGHT - 100
-                            cursor_y = draw_section_title(canvas, seccion, cursor_y)
 
-                        imagenes_temp, used_height = draw_images(
-                            canvas, imagenes_temp, per_page=layout, start_y=cursor_y
-                        )
-                        cursor_y -= used_height
-                        hubo_contenido = True
+                    # Regla de negocio: pantalla/pruebas = 1 foto por fila, mantenimiento = 2.
+                    is_full_width = (
+                        "pantalla" in txt_busqueda or "pruebas" in txt_busqueda
+                    )
+                    num_fotos_fila = 1 if is_full_width else 2
 
-                    # --- SALTO DE PÁGINA INTELIGENTE ---
-                    es_el_final_absoluto = (
-                        (i_sec == total_secciones - 1) and 
-                        (i_sub == total_subs - 1) and 
-                        (i_gru == total_grupos - 1) and 
-                        (i_cat == total_cats - 1)
+                    # --- LLAMADA A TU NUEVA FUNCIÓN ---
+                    cursor_y = draw_images_by_rows(
+                        canvas,
+                        imgs_cat,
+                        images_per_row=num_fotos_fila,
+                        start_y=cursor_y,
+                        project_data=project_data,  # Para que sepa redibujar header
+                        seccion=seccion,  # Para que sepa redibujar título
+                        callback_progreso=callback_progreso,
+                        total_imagenes=total_imagenes,
+                        imagenes_procesadas_ref=imagenes_procesadas_ref,
                     )
 
-                    if not es_el_final_absoluto:
-                        if cursor_y < (PAGE_HEIGHT - 150):
-                            canvas.showPage()
-                            draw_header_footer(canvas, canvas.getPageNumber(), project_data)
-                            cursor_y = PAGE_HEIGHT - 100
-                            cursor_y = draw_section_title(canvas, seccion, cursor_y)
-              
     return cursor_y
 
 
 def build_pdf(
-    filename, with_index, data, mantenimiento_tree, index_items=None, index=None, usa_ubicacion=True
+    filename,
+    with_index,
+    data,
+    mantenimiento_tree,
+    index_items=None,
+    index=None,
+    usa_ubicacion=True,
 ):
     # pageCompression=1 es genial para que no pese tanto
     c = canvas.Canvas(filename, pagesize=A4, pageCompression=1)
 
     # Solo necesitamos rastrear el cursor vertical, el número lo lleva el canvas
-    cursor_y = PAGE_HEIGHT - 100
+    cursor_y = TOP_SAFE_MARGIN
 
     # -------- PORTADA --------
     # draw_cover internamente ya llama a draw_header_footer con None (sin número)
@@ -278,12 +311,16 @@ def build_pdf(
             # Si quedan más imágenes de ubicación, saltamos de página
             if imagenes_restantes:
                 c.showPage()
-                cursor_y = PAGE_HEIGHT - 100
+                cursor_y = TOP_SAFE_MARGIN
 
     # -------- MANTENIMIENTO --------
     # MODIFICADO: Solo enviamos y recibimos cursor_y
     cursor_y = render_mantenimiento(
-        c, cursor_y, mantenimiento_tree, project_data, index=index
+        c,
+        cursor_y,
+        mantenimiento_tree,
+        project_data,
+        index=index,
     )
 
     c.save()
@@ -293,9 +330,10 @@ def build_pdf(
 # MAIN
 # ============================================================
 
+
 def resource_path(relative_path):
-    """ Obtiene la ruta absoluta para recursos, funciona en dev y en PyInstaller """
-    if hasattr(sys, '_MEIPASS'):
+    """Obtiene la ruta absoluta para recursos, funciona en dev y en PyInstaller"""
+    if hasattr(sys, "_MEIPASS"):
         return os.path.join(sys._MEIPASS, relative_path)
     return os.path.join(os.path.abspath("."), relative_path)
 
@@ -311,20 +349,20 @@ def main(gui_data=None, callback_progreso=None):
         project_data.update(gui_data)
         ZIP_PATH = gui_data.get("zip_path")
         usa_ubicacion = gui_data.get("usa_ubicacion", True)
-    
+
     # Validación estricta
     if not project_data.get("titulo") or not ZIP_PATH:
         raise ValueError("Error crítico: No se recibió información obligatoria.")
 
     def reportar(n):
-        if callback_progreso: callback_progreso(n)
+        if callback_progreso:
+            callback_progreso(n)
 
-    reportar(10) # 10% - Iniciando
+    reportar(10)  # 10% - Iniciando
 
     limpiar_temp(TEMP_DIR)
     extraer_zip(ZIP_PATH, TEMP_DIR)
-    
-    reportar(30) # 30% - Clasificando
+
 
     raiz = obtener_carpeta_raiz(TEMP_DIR)
     data = clasificar_archivos(raiz)
@@ -332,7 +370,7 @@ def main(gui_data=None, callback_progreso=None):
     mantenimiento_tree = build_mantenimiento_tree(
         data["mantenimiento"]["imagenes"], raiz, usa_ubicacion=usa_ubicacion
     )
-    
+
     pdf_tree = build_pdf_tree(
         data["mantenimiento"]["pdfs"], raiz, usa_ubicacion=usa_ubicacion
     )
@@ -342,21 +380,20 @@ def main(gui_data=None, callback_progreso=None):
     )
 
     insert_tasks = []
-    
-    destino_base = gui_data.get("output_dir", "output") if gui_data else "output"
 
+    destino_base = gui_data.get("output_dir", "output") if gui_data else "output"
 
     # ============================================================
     # PRIMERA PASADA (Solo para recolectar el Índice)
     # ============================================================
     index = IndexCollector()
-    
+
     if not os.path.exists("output"):
         os.makedirs("output")
 
     # Archivo temporal para medir distancias y páginas
     c = canvas.Canvas("output/_tmp_recolector.pdf", pagesize=A4)
-    cursor_y = PAGE_HEIGHT - 100
+    cursor_y = TOP_SAFE_MARGIN
 
     # ---------------- PORTADA ----------------
     draw_cover(c, project_data, project_data)
@@ -367,9 +404,11 @@ def main(gui_data=None, callback_progreso=None):
     # Importante: enviamos project_data para que draw_introduccion gestione sus propios saltos
     cursor_y = draw_introduccion(c, project_data["introduccion"], project_data)
     c.showPage()
-    
+
     # --- Simulación de espacio para el Índice ---
-    num_paginas_idx = calcular_paginas_indice(mantenimiento_tree, data, usa_ubicacion=usa_ubicacion)
+    num_paginas_idx = calcular_paginas_indice(
+        mantenimiento_tree, data, usa_ubicacion=usa_ubicacion
+    )
     for _ in range(num_paginas_idx):
         if usa_ubicacion:
             c.showPage()
@@ -397,8 +436,7 @@ def main(gui_data=None, callback_progreso=None):
 
             if imagenes_restantes:
                 c.showPage()
-                cursor_y = PAGE_HEIGHT - 100
-
+                cursor_y = TOP_SAFE_MARGIN
 
     # ---------------- INVENTARIO ----------------
     if data["inventario"]:
@@ -406,7 +444,7 @@ def main(gui_data=None, callback_progreso=None):
         for pdf in data["inventario"]:
             # 1. Dibujamos la página del marcador (la que tendrá el encabezado)
             c.showPage()
-            
+
             # Si es el primer PDF del inventario, registramos la sección
             if pdf == data["inventario"][0]:
                 index.add("Inventario", c.getPageNumber(), level=1)
@@ -429,17 +467,17 @@ def main(gui_data=None, callback_progreso=None):
         project_data,
         index=index,  # Aquí se recolectan niveles 1, 2 y 3
         insert_tasks=None,  # En la primera pasada no necesitamos anotar tareas de reemplazo
+        callback_progreso=None,
     )
-    
+
     # --- DOCUMENTACIÓN TÉCNICA (links PDFs de mantenimiento) ---
     cursor_y = render_documentacion_links(
         c,
         PAGE_HEIGHT - 100,
         pdfs_mantenimiento_tree,  # <--- CAMBIAR pdf_tree POR pdfs_mantenimiento_tree
         project_data,
-        index=index        
+        index=index,
     )
-
 
     # ---------------- ANEXOS ----------------
     # Aseguramos que los Anexos empiecen en página nueva
@@ -490,8 +528,8 @@ def main(gui_data=None, callback_progreso=None):
 
             if imagenes_restantes:
                 c.showPage()
-        
-        c.showPage() # Necesario para cuando se necesita más de una hoja 
+
+        c.showPage()  # Necesario para cuando se necesita más de una hoja
 
     # ---------------- INVENTARIO (Segunda Pasada) ----------------
     for i, pdf in enumerate(data["inventario"]):
@@ -507,11 +545,7 @@ def main(gui_data=None, callback_progreso=None):
         insert_tasks.append((p_actual, pdf))
 
         c.setFont(FUENTE_NEGRITA, 14)
-        c.drawString(
-            MARGIN,
-            PAGE_HEIGHT - 120,
-            f"Documento: {os.path.basename(pdf)}"
-        )
+        c.drawString(MARGIN, PAGE_HEIGHT - 120, f"Documento: {os.path.basename(pdf)}")
 
         # Simulamos las páginas restantes del PDF
         if os.path.exists(pdf):
@@ -520,7 +554,6 @@ def main(gui_data=None, callback_progreso=None):
 
             for _ in range(paginas_pdf - 1):
                 c.showPage()
-
 
     # ---------------- MANTENIMIENTO ----------------
     render_mantenimiento(
@@ -531,17 +564,17 @@ def main(gui_data=None, callback_progreso=None):
         project_data,
         index=None,  # Ya no recolectamos, ya tenemos index_items
         insert_tasks=insert_tasks,
+        callback_progreso=callback_progreso,
     )
-    
+
     # --- DOCUMENTACIÓN TÉCNICA (links PDFs de mantenimiento) ---
     cursor_y = render_documentacion_links(
         c,
         PAGE_HEIGHT - 100,
         pdfs_mantenimiento_tree,  # <--- CAMBIAR pdf_tree POR pdfs_mantenimiento_tree
         project_data,
-        index=None
+        index=None,
     )
-
 
     # ---------------- ANEXOS (Listado con Links) ----------------
     c.showPage()
@@ -580,9 +613,9 @@ def main(gui_data=None, callback_progreso=None):
 
     # Mantenemos una lista de lectores para evitar cierres prematuros
     lectores_externos = []
-    
+
     # --- VARIABLE CLAVE PARA ELIMINAR HOJAS EN BLANCO ---
-    skip_until = -1 
+    skip_until = -1
 
     for i, page in enumerate(reader.pages):
         num_pdf = i + 1
@@ -594,7 +627,9 @@ def main(gui_data=None, callback_progreso=None):
         if num_pdf in tareas_dict:
             ruta_pdf_real = tareas_dict[num_pdf]
             if os.path.exists(ruta_pdf_real):
-                print(f"-> Insertando: {os.path.basename(ruta_pdf_real)} (Sustituye pág {num_pdf})")
+                print(
+                    f"-> Insertando: {os.path.basename(ruta_pdf_real)} (Sustituye pág {num_pdf})"
+                )
 
                 ext_reader = PdfReader(ruta_pdf_real)
                 lectores_externos.append(ext_reader)
@@ -602,31 +637,34 @@ def main(gui_data=None, callback_progreso=None):
                 # Insertamos todas las páginas del PDF real
                 for page_ext in ext_reader.pages:
                     writer.add_page(page_ext)
-                
+
                 # --- LÓGICA DE SALTO ---
-                # Si el PDF real tiene 5 páginas y empezó en la 6, 
+                # Si el PDF real tiene 5 páginas y empezó en la 6,
                 # el canvas generó la 7, 8, 9 y 10 como blancas.
                 # Esta línea le dice al bucle que ignore esas páginas del reader.
                 skip_until = num_pdf + len(ext_reader.pages) - 1
-                
+
             else:
-                print(f"⚠️ Archivo no encontrado: {ruta_pdf_real}. Manteniendo marcador.")
+                print(
+                    f"⚠️ Archivo no encontrado: {ruta_pdf_real}. Manteniendo marcador."
+                )
                 writer.add_page(page)
         else:
             # Página normal (Introducción, Ubicación, Mantenimiento, etc.)
             writer.add_page(page)
-            
+
     # Aseguramos que la carpeta base exista
     if not os.path.exists(destino_base):
         os.makedirs(destino_base)
 
     # --- PREPARACIÓN DE CARPETAS ---
     # Extraemos la ruta que eligió el usuario en la GUI
-    ruta_destino_usuario = gui_data.get("output_dir", "output") if gui_data else "output"
+    ruta_destino_usuario = (
+        gui_data.get("output_dir", "output") if gui_data else "output"
+    )
 
     # Construimos las rutas finales en esa carpeta
     entrega_dir = os.path.join(ruta_destino_usuario, "Reporte_Final_Entrega")
-    reportar(90) # 90% - Comprimiendo entrega
     zip_entrega = os.path.join(ruta_destino_usuario, "Memoria_Tecnica_Final.zip")
     anexos_dir = os.path.join(entrega_dir, "anexos")
 
@@ -644,53 +682,74 @@ def main(gui_data=None, callback_progreso=None):
     with open(output_path, "wb") as f:
         writer.write(f)
 
-    # --- COPIAR ANEXOS EXTERNOS ---
+    # Contar archivos para barra de progreso
+    archivos_para_zip = []
+
+    # PDF principal
+    archivos_para_zip.append(output_path)
+
+    # Anexos directos
     for pdf_anexo in data.get("anexos", []):
         if os.path.exists(pdf_anexo):
-            shutil.copy(pdf_anexo, anexos_dir)
-            
-    # --- COPIAR DOCUMENTACIÓN DE MANTENIMIENTO ---
+            archivos_para_zip.append(pdf_anexo)
+
+    # PDFs del árbol
     for seccion, subsecciones in pdf_tree.items():
         for subseccion, grupos in subsecciones.items():
             for grupo, categorias in grupos.items():
                 for categoria, pdfs in categorias.items():
                     for pdf in pdfs:
                         if os.path.exists(pdf):
-                            shutil.copy(pdf, anexos_dir)
-                            
-                            
-    with zipfile.ZipFile(zip_entrega, 'w', zipfile.ZIP_DEFLATED) as zipf:
-        for root, dirs, files in os.walk(entrega_dir):
-            for file in files:
-                rel_path = os.path.relpath(os.path.join(root, file), entrega_dir)
-                zipf.write(os.path.join(root, file), rel_path)
+                            archivos_para_zip.append(pdf)
+
+    total_archivos = len(archivos_para_zip)
+    procesados = 0
+
+    # --- COPIAR ANEXOS EXTERNOS ---
+    reportar(80)  # empieza la compresión
+
+    with zipfile.ZipFile(
+        zip_entrega, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=4
+    ) as zipf:
+
+        for archivo in archivos_para_zip:
+
+            # Determinar nombre dentro del ZIP
+            if archivo == output_path:
+                nombre_zip = "Reporte_Principal.pdf"
+            else:
+                nombre_zip = f"anexos/{os.path.basename(archivo)}"
+
+            zipf.write(archivo, nombre_zip)
+
+            # 🔥 Actualizar progreso
+            procesados += 1
+            progreso_local = procesados / total_archivos
+            reportar(80 + int(15 * progreso_local))
 
     # --- BLOQUE DE LIMPIEZA FINAL OPTIMIZADO ---
     try:
         # 1. Borrar la carpeta de trabajo donde se armó el reporte
         if os.path.exists(entrega_dir):
             shutil.rmtree(entrega_dir)
-            
+
         # 2. Borrar la carpeta temp (donde se extrajo el ZIP original)
         if os.path.exists(TEMP_DIR):
             shutil.rmtree(TEMP_DIR)
-            
+
         # 3. Borrar archivos PDF intermedios que ya están dentro del ZIP final
-        archivos_a_limpiar = [
-            "output/_tmp_recolector.pdf",
-            "output/mvp_imagenes.pdf"
-        ]
+        archivos_a_limpiar = ["output/_tmp_recolector.pdf", "output/mvp_imagenes.pdf"]
         for archivo in archivos_a_limpiar:
             if os.path.exists(archivo):
                 os.remove(archivo)
-                
+
         print(f"🧹 Limpieza profunda completada. Solo queda el ZIP de entrega.")
     except Exception as e:
         print(f"⚠️ Nota: Algunos archivos temporales no pudieron borrarse: {e}")
 
-    reportar(100) # Indica a la interfaz que terminamos
+    reportar(100)  # Indica a la interfaz que terminamos
     return zip_entrega
-    
+
     print(f"✅ Proceso completo. Carpeta generada en: {entrega_dir}")
 
 
