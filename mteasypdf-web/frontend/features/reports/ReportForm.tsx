@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { FileInput } from "@/components/FileInput";
 import { TextInput } from "@/components/TextInput";
+import { DocumentationCard } from "@/components/DocumentationCard";
 
 import {
   buildDownloadUrl,
@@ -263,6 +264,7 @@ export function ReportForm() {
           </div>
         </section>
       </form>
+      <DocumentationCard />
     </div>
   );
 }
