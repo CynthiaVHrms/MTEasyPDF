@@ -5,8 +5,11 @@ export type GenerateReportResponse = {
   zip_path: string;
 };
 
+
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
+  process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ??
+  "http://127.0.0.1:8000";
+
 
 export async function generateReport(
   formData: FormData
@@ -16,13 +19,27 @@ export async function generateReport(
     body: formData,
   });
 
-  const data = await response.json();
+  let data: unknown;
 
-  if (!response.ok) {
-    throw new Error(data.detail ?? "Error generando el reporte.");
+  try {
+    data = await response.json();
+  } catch {
+    throw new Error("El servidor respondió con un formato inválido.");
   }
 
-  return data;
+  if (!response.ok) {
+    const message =
+      typeof data === "object" &&
+      data !== null &&
+      "detail" in data &&
+      typeof data.detail === "string"
+        ? data.detail
+        : "Error generando el reporte.";
+
+    throw new Error(message);
+  }
+
+  return data as GenerateReportResponse;
 }
 
 export function buildDownloadUrl(downloadUrl: string): string {

@@ -11,8 +11,17 @@ from app.pdf_engine.models import ReportGenerationRequest
 
 
 router = APIRouter(prefix="/reports", tags=["Reports"])
-
 storage = StorageService()
+
+
+def save_upload_file(upload_file: UploadFile | None, path: Path) -> str:
+    if not upload_file or not upload_file.filename:
+        return ""
+
+    with open(path, "wb") as buffer:
+        shutil.copyfileobj(upload_file.file, buffer)
+
+    return str(path)
 
 
 @router.post("/generate")
@@ -21,10 +30,14 @@ async def generate_report_endpoint(
     info_extra: str = Form(""),
     introduccion: str = Form(""),
     usa_ubicacion: bool = Form(True),
+
     imagen_portada: UploadFile | None = File(None),
-    logo1: UploadFile | None = File(None),
-    logo2: UploadFile | None = File(None),
-    logo3: UploadFile | None = File(None),
+
+    logo_sup_izq: UploadFile | None = File(None),
+    logo_sup_der: UploadFile | None = File(None),
+    logo_inf_izq: UploadFile | None = File(None),
+    logo_inf_der: UploadFile | None = File(None),
+
     evidencias_zip: UploadFile = File(...),
 ):
     if not evidencias_zip.filename.lower().endswith(".zip"):
@@ -45,31 +58,41 @@ async def generate_report_endpoint(
     with open(zip_path, "wb") as buffer:
         shutil.copyfileobj(evidencias_zip.file, buffer)
 
-    portada_path = None
+    portada_path = save_upload_file(
+        imagen_portada,
+        input_dir / "portada.png",
+    )
 
-    if imagen_portada and imagen_portada.filename:
-        portada_path = input_dir / "portada.png"
+    logo_sup_izq_path = save_upload_file(
+        logo_sup_izq,
+        input_dir / "logo_sup_izq.png",
+    )
 
-        with open(portada_path, "wb") as buffer:
-            shutil.copyfileobj(imagen_portada.file, buffer)
+    logo_sup_der_path = save_upload_file(
+        logo_sup_der,
+        input_dir / "logo_sup_der.png",
+    )
 
-    logo_paths = []
+    logo_inf_izq_path = save_upload_file(
+        logo_inf_izq,
+        input_dir / "logo_inf_izq.png",
+    )
 
-    for index, logo in enumerate([logo1, logo2, logo3], start=1):
-        if logo and logo.filename:
-            logo_path = input_dir / f"logo_{index}.png"
-
-            with open(logo_path, "wb") as buffer:
-                shutil.copyfileobj(logo.file, buffer)
-
-            logo_paths.append(str(logo_path))
+    logo_inf_der_path = save_upload_file(
+        logo_inf_der,
+        input_dir / "logo_inf_der.png",
+    )
 
     project_data = {
         "titulo": titulo,
         "info_extra": info_extra,
         "introduccion": introduccion,
-        "imagen_portada": str(portada_path) if portada_path else "",
-        "logos": logo_paths,
+        "imagen_portada": portada_path,
+
+        "logo_sup_izq": logo_sup_izq_path,
+        "logo_sup_der": logo_sup_der_path,
+        "logo_inf_izq": logo_inf_izq_path,
+        "logo_inf_der": logo_inf_der_path,
     }
 
     request = ReportGenerationRequest(
@@ -116,3 +139,4 @@ def download_report(job_id: str):
         filename="Memoria_Tecnica_Final.zip",
         media_type="application/zip",
     )
+

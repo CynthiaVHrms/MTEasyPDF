@@ -18,9 +18,10 @@ export function ReportForm() {
   const [usaUbicacion, setUsaUbicacion] = useState(true);
 
   const [imagenPortada, setImagenPortada] = useState<File | null>(null);
-  const [logo1, setLogo1] = useState<File | null>(null);
-  const [logo2, setLogo2] = useState<File | null>(null);
-  const [logo3, setLogo3] = useState<File | null>(null);
+  const [logoSupIzq, setLogoSupIzq] = useState<File | null>(null);
+  const [logoSupDer, setLogoSupDer] = useState<File | null>(null);
+  const [logoInfIzq, setLogoInfIzq] = useState<File | null>(null);
+  const [logoInfDer, setLogoInfDer] = useState<File | null>(null);
   const [evidenciasZip, setEvidenciasZip] = useState<File | null>(null);
 
   const [isGenerating, setIsGenerating] = useState(false);
@@ -46,10 +47,25 @@ export function ReportForm() {
     formData.append("usa_ubicacion", String(usaUbicacion));
     formData.append("evidencias_zip", evidenciasZip);
 
-    if (imagenPortada) formData.append("imagen_portada", imagenPortada);
-    if (logo1) formData.append("logo1", logo1);
-    if (logo2) formData.append("logo2", logo2);
-    if (logo3) formData.append("logo3", logo3);
+    if (imagenPortada) {
+      formData.append("imagen_portada", imagenPortada);
+    }
+
+    if (logoSupIzq) {
+      formData.append("logo_sup_izq", logoSupIzq);
+    }
+
+    if (logoSupDer) {
+      formData.append("logo_sup_der", logoSupDer);
+    }
+
+    if (logoInfIzq) {
+      formData.append("logo_inf_izq", logoInfIzq);
+    }
+
+    if (logoInfDer) {
+      formData.append("logo_inf_der", logoInfDer);
+    }
 
     try {
       setIsGenerating(true);
@@ -68,11 +84,13 @@ export function ReportForm() {
 
   return (
     <div className="mx-auto max-w-6xl">
-      <div className="mb-8 rounded-3xl bg-gradient-to-r from-blue-700 to-slate-900 px-8 py-10 text-white shadow-xl">
+      <div className="mb-8 rounded-3xl bg-linear-to-r from-blue-700 to-slate-900 px-8 py-10 text-white shadow-xl">
         <p className="text-sm font-semibold uppercase tracking-[0.3em] text-blue-100">
           HEMAC Automation Engine
         </p>
+
         <h1 className="mt-3 text-4xl font-bold">MTEasyPDF Web</h1>
+
         <p className="mt-3 max-w-3xl text-sm leading-6 text-blue-100">
           Generador web de memoria técnica. Carga la evidencia, captura los
           datos del proyecto y descarga el ZIP final con el reporte principal y
@@ -88,6 +106,7 @@ export function ReportForm() {
           <h2 className="text-xl font-bold text-slate-900">
             Datos del proyecto
           </h2>
+
           <p className="mt-1 text-sm text-slate-500">
             Información que aparecerá dentro de la memoria técnica.
           </p>
@@ -124,6 +143,7 @@ export function ReportForm() {
                 <span className="block text-sm font-semibold text-slate-800">
                   Incluir sección de ubicación
                 </span>
+
                 <span className="text-xs text-slate-500">
                   Mantiene la lógica actual del reporte de escritorio.
                 </span>
@@ -143,8 +163,9 @@ export function ReportForm() {
           <h2 className="text-xl font-bold text-slate-900">
             Archivos del reporte
           </h2>
+
           <p className="mt-1 text-sm text-slate-500">
-            Sube portada, logos y el ZIP de evidencias.
+            Sube portada, logos de esquinas y el ZIP de evidencias.
           </p>
 
           <div className="mt-6 space-y-4">
@@ -157,27 +178,35 @@ export function ReportForm() {
             />
 
             <FileInput
-              label="Logo 1"
-              name="logo1"
+              label="Logo superior izquierdo"
+              name="logo_sup_izq"
               accept="image/png,image/jpeg"
-              helperText="Opcional."
-              onChange={setLogo1}
+              helperText="Opcional. Se mostrará en la esquina superior izquierda."
+              onChange={setLogoSupIzq}
             />
 
             <FileInput
-              label="Logo 2"
-              name="logo2"
+              label="Logo superior derecho"
+              name="logo_sup_der"
               accept="image/png,image/jpeg"
-              helperText="Opcional."
-              onChange={setLogo2}
+              helperText="Opcional. Se mostrará en la esquina superior derecha."
+              onChange={setLogoSupDer}
             />
 
             <FileInput
-              label="Logo 3"
-              name="logo3"
+              label="Logo inferior izquierdo"
+              name="logo_inf_izq"
               accept="image/png,image/jpeg"
-              helperText="Opcional."
-              onChange={setLogo3}
+              helperText="Opcional. Se mostrará en la esquina inferior izquierda."
+              onChange={setLogoInfIzq}
+            />
+
+            <FileInput
+              label="Logo inferior derecho"
+              name="logo_inf_der"
+              accept="image/png,image/jpeg"
+              helperText="Opcional. Se mostrará en la esquina inferior derecha."
+              onChange={setLogoInfDer}
             />
 
             <FileInput
@@ -204,6 +233,7 @@ export function ReportForm() {
                 <p className="text-sm font-bold text-emerald-800">
                   Reporte generado correctamente
                 </p>
+
                 <p className="mt-1 text-xs text-emerald-700">
                   Job ID: {result.job_id}
                 </p>
