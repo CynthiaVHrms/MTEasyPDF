@@ -32,7 +32,7 @@ export function DocumentationCard() {
           </div>
 
           <a
-            href="/docs/manual-usuario-mteasypdf-web.pdf"
+            href="/docs/Manual de Usuario MTEasy.pdf"
             download
             className="inline-flex justify-center rounded-2xl bg-blue-700 px-6 py-4 text-sm font-bold text-white shadow-lg transition hover:bg-blue-800"
           >
