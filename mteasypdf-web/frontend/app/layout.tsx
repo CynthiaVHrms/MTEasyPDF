@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title:  "MTEasyPDF Web",
+  title:  "M.I.A Modulo de Informacion y Anexos",
   description: "Generador web de memorias técnicas HEMAC",
 };
 

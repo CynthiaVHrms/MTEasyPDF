@@ -38,7 +38,7 @@ export function AppShell() {
           <p className="text-xs font-semibold uppercase tracking-[0.35em] text-blue-100">
             HEMAC Automation Engine
           </p>
-          <h1 className="mt-3 text-4xl font-bold">MTEasyPDF Web</h1>
+          <h1 className="mt-3 text-4xl font-bold">M.I.A Módulo de Información y Anexos</h1>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-blue-100">
             Plataforma interna para generación documental, Memorias Técnicas y
             automatización de Protocolos C5.
@@ -93,7 +93,7 @@ export function AppShell() {
 
             <div className="mt-5 rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
               <p className="text-sm font-bold text-emerald-800">
-                MTEasyPDF Web v1.0.0
+                M.I.A Modulo de Informacion y Anexos
               </p>
               <p className="mt-1 text-xs text-emerald-700">
                 FastAPI · Next.js · HEMAC

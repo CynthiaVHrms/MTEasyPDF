@@ -42,9 +42,32 @@ export type ProtocolGenerationDiagnostics = {
   clasificaciones_no_encontradas: MissingClassificationDiagnostic[];
 };
 
-export type GenerateC5DocumentResult = {
-  jobId: string | null;
-  diagnostics: ProtocolGenerationDiagnostics | null;
+export type ProtocolDocumentJobStatus = {
+  schema_version: string;
+  job_id: string;
+  status: "queued" | "processing" | "completed" | "failed";
+  stage: string;
+  percentage: number;
+  message: string;
+  current_site: number;
+  total_sites: number;
+  current_site_name: string;
+  processed_images: number;
+  total_images: number;
+  detected_images: number;
+  download_ready: boolean;
+  diagnostics_ready: boolean;
+  error: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CreateProtocolDocumentJobResponse = {
+  job_id: string;
+  status: "queued";
+  status_url: string;
+  download_url: string;
+  diagnostics_url: string;
 };
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -78,38 +101,6 @@ async function getErrorMessage(
   return fallbackMessage;
 }
 
-async function getDocumentDiagnostics(
-  jobId: string,
-): Promise<ProtocolGenerationDiagnostics | null> {
-  try {
-    const response = await fetch(
-      `${API_BASE_URL}/protocols/document/${encodeURIComponent(
-        jobId,
-      )}/diagnostics`,
-      {
-        method: "GET",
-        cache: "no-store",
-      },
-    );
-
-    if (!response.ok) {
-      console.warn(
-        "No fue posible consultar el diagnóstico del documento:",
-        response.status,
-      );
-      return null;
-    }
-
-    return (await response.json()) as ProtocolGenerationDiagnostics;
-  } catch (error) {
-    console.warn(
-      "El documento se descargó, pero no fue posible consultar su diagnóstico.",
-      error,
-    );
-    return null;
-  }
-}
-
 export async function generateC5Folders(excelFile: File): Promise<void> {
   const formData = new FormData();
   formData.append("excel_file", excelFile);
@@ -129,97 +120,121 @@ export async function generateC5Folders(excelFile: File): Promise<void> {
   downloadBlob(blob, "Estructura_Carpetas_C5.zip");
 }
 
-export async function generateC5Document(
+export async function createC5DocumentJob(
   excelFile: File,
   evidenceZip: File,
-): Promise<GenerateC5DocumentResult> {
+  signal?: AbortSignal,
+): Promise<CreateProtocolDocumentJobResponse> {
   const formData = new FormData();
 
   formData.append("excel_file", excelFile);
   formData.append("evidence_zip", evidenceZip);
 
-  const response = await fetch(`${API_BASE_URL}/protocols/document/generate`, {
+  const response = await fetch(`${API_BASE_URL}/protocols/document/jobs`, {
     method: "POST",
     body: formData,
+    signal,
   });
 
   if (!response.ok) {
     throw new Error(
-      await getErrorMessage(response, "Error generando documento Word."),
+      await getErrorMessage(
+        response,
+        "No fue posible iniciar la generación del documento Word.",
+      ),
     );
   }
 
-  const jobId = response.headers.get("X-Job-Id");
-  const blob = await response.blob();
-
-  downloadBlob(blob, "Protocolo_C5_Generado.docx");
-
-  const diagnostics = jobId ? await getDocumentDiagnostics(jobId) : null;
-
-  return {
-    jobId,
-    diagnostics,
-  };
+  return (await response.json()) as CreateProtocolDocumentJobResponse;
 }
 
+export async function getC5DocumentJobStatus(
+  jobId: string,
+  signal?: AbortSignal,
+): Promise<ProtocolDocumentJobStatus> {
+  const response = await fetch(
+    `${API_BASE_URL}/protocols/document/${encodeURIComponent(jobId)}/status`,
+    {
+      method: "GET",
+      cache: "no-store",
+      signal,
+    },
+  );
 
+  if (!response.ok) {
+    throw new Error(
+      await getErrorMessage(
+        response,
+        "No fue posible consultar el avance de la generación.",
+      ),
+    );
+  }
 
+  return (await response.json()) as ProtocolDocumentJobStatus;
+}
 
+export async function downloadC5Document(
+  jobId: string,
+  signal?: AbortSignal,
+): Promise<void> {
+  const response = await fetch(
+    `${API_BASE_URL}/protocols/document/${encodeURIComponent(jobId)}/download`,
+    {
+      method: "GET",
+      cache: "no-store",
+      signal,
+    },
+  );
 
+  if (!response.ok) {
+    throw new Error(
+      await getErrorMessage(
+        response,
+        "El documento terminó, pero no fue posible descargarlo.",
+      ),
+    );
+  }
 
-// const API_BASE_URL =
-//   process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ??
-//   "http://127.0.0.1:8000";
+  const blob = await response.blob();
+  downloadBlob(blob, "Protocolo_C5_Generado.docx");
+}
 
-// function downloadBlob(blob: Blob, filename: string) {
-//   const url = window.URL.createObjectURL(blob);
-//   const link = document.createElement("a");
+export async function getC5DocumentDiagnostics(
+  jobId: string,
+  signal?: AbortSignal,
+): Promise<ProtocolGenerationDiagnostics | null> {
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/protocols/document/${encodeURIComponent(
+        jobId,
+      )}/diagnostics`,
+      {
+        method: "GET",
+        cache: "no-store",
+        signal,
+      },
+    );
 
-//   link.href = url;
-//   link.download = filename;
-//   document.body.appendChild(link);
-//   link.click();
+    if (!response.ok) {
+      console.warn(
+        "No fue posible consultar el diagnóstico del documento:",
+        response.status,
+      );
+      return null;
+    }
 
-//   link.remove();
-//   window.URL.revokeObjectURL(url);
-// }
+    return (await response.json()) as ProtocolGenerationDiagnostics;
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw error;
+    }
 
-// export async function generateC5Folders(excelFile: File) {
-//   const formData = new FormData();
-//   formData.append("excel_file", excelFile);
-
-//   const response = await fetch(`${API_BASE_URL}/protocols/folders/generate`, {
-//     method: "POST",
-//     body: formData,
-//   });
-
-//   if (!response.ok) {
-//     const error = await response.json().catch(() => null);
-//     throw new Error(error?.detail ?? "Error generando carpetas.");
-//   }
-
-//   const blob = await response.blob();
-//   downloadBlob(blob, "Estructura_Carpetas_C5.zip");
-// }
-
-// export async function generateC5Document(excelFile: File, evidenceZip: File) {
-//   const formData = new FormData();
-
-//   formData.append("excel_file", excelFile);
-//   formData.append("evidence_zip", evidenceZip);
-
-//   const response = await fetch(`${API_BASE_URL}/protocols/document/generate`, {
-//     method: "POST",
-//     body: formData,
-//   });
-
-//   if (!response.ok) {
-//     const error = await response.json().catch(() => null);
-//     throw new Error(error?.detail ?? "Error generando documento Word.");
-//   }
-
-//   const blob = await response.blob();
-//   downloadBlob(blob, "Protocolo_C5_Generado.docx");
-// }
+    console.warn(
+      "El documento se descargó, pero no fue posible consultar su diagnóstico.",
+      error,
+    );
+    return null;
+  }
+}
 
 

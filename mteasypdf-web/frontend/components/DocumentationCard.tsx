@@ -10,7 +10,7 @@ export function DocumentationCard() {
       </h2>
 
       <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-500">
-        Descarga la guía oficial para utilizar MTEasyPDF Web paso a paso.
+        Descarga la guía oficial para utilizar M.I.A Web paso a paso.
       </p>
 
       <div className="mt-6 rounded-3xl border border-blue-100 bg-blue-50 p-6">

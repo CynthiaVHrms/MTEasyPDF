@@ -12,6 +12,7 @@ import zipfile
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 from pathlib import Path, PurePosixPath
+from typing import Callable
 from uuid import uuid4
 
 import pandas as pd
@@ -88,6 +89,48 @@ class ProtocolDocumentResult:
     total_imagenes_no_encontradas: int = 0
     total_clasificaciones_no_encontradas: int = 0
     diagnostics_path: Path | None = None
+
+
+ProtocolProgressCallback = Callable[[dict[str, object]], None]
+
+
+def _emit_progress(
+    callback: ProtocolProgressCallback | None,
+    *,
+    stage: str,
+    percentage: int,
+    message: str,
+    current_site: int = 0,
+    total_sites: int = 0,
+    current_site_name: str = "",
+    processed_images: int = 0,
+    total_images: int = 0,
+    detected_images: int = 0,
+) -> None:
+    """Publica avance sin permitir que un fallo informativo detenga el Word."""
+
+    if callback is None:
+        return
+
+    payload: dict[str, object] = {
+        "stage": stage,
+        "percentage": max(0, min(100, int(percentage))),
+        "message": message,
+        "current_site": max(0, int(current_site)),
+        "total_sites": max(0, int(total_sites)),
+        "current_site_name": current_site_name,
+        "processed_images": max(0, int(processed_images)),
+        "total_images": max(0, int(total_images)),
+        "detected_images": max(0, int(detected_images)),
+    }
+
+    try:
+        callback(payload)
+    except Exception:
+        logger.exception(
+            "No fue posible publicar el avance del trabajo. "
+            "La generación continuará."
+        )
 
 
 def normalizar_texto(texto: object) -> str:
@@ -1036,8 +1079,18 @@ def generate_protocol_document(
     evidence_zip_path: Path,
     template_docx_path: Path,
     work_dir: Path,
+    *,
+    job_id: str | None = None,
+    progress_callback: ProtocolProgressCallback | None = None,
 ) -> ProtocolDocumentResult:
     """Genera el protocolo Word final a partir del Excel y ZIP de evidencias."""
+
+    _emit_progress(
+        progress_callback,
+        stage="validating_files",
+        percentage=3,
+        message="Validando los archivos recibidos.",
+    )
 
     excel_path = Path(excel_path)
     evidence_zip_path = Path(evidence_zip_path)
@@ -1057,7 +1110,7 @@ def generate_protocol_document(
             f"No existe la plantilla Word: {template_docx_path}"
         )
 
-    job_id = uuid4().hex
+    job_id = job_id or uuid4().hex
     job_dir = work_dir / job_id
 
     # Nombres deliberadamente cortos. Además del soporte de rutas extendidas,
@@ -1077,9 +1130,35 @@ def generate_protocol_document(
     temp_dir.mkdir(parents=True, exist_ok=True)
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    _emit_progress(
+        progress_callback,
+        stage="preparing_workspace",
+        percentage=6,
+        message="Preparando el espacio de trabajo.",
+    )
+    _emit_progress(
+        progress_callback,
+        stage="extracting_zip",
+        percentage=8,
+        message="Extrayendo y validando el ZIP de evidencias.",
+    )
+
     effective_extract_dir = safe_extract_zip(
         zip_path=evidence_zip_path,
         extract_dir=extract_dir,
+    )
+
+    _emit_progress(
+        progress_callback,
+        stage="extracting_zip",
+        percentage=16,
+        message="ZIP extraído correctamente.",
+    )
+    _emit_progress(
+        progress_callback,
+        stage="reading_excel",
+        percentage=18,
+        message="Leyendo y validando la plantilla Excel.",
     )
 
     try:
@@ -1119,6 +1198,14 @@ def generate_protocol_document(
     hoja1["ID"] = hoja1["ID"].astype(str).str.strip()
     hoja2["ID"] = hoja2["ID"].astype(str).str.strip()
 
+    _emit_progress(
+        progress_callback,
+        stage="reading_excel",
+        percentage=22,
+        message="La plantilla Excel fue validada correctamente.",
+        total_sites=len(hoja1),
+    )
+
     expected_link_names = [
         texto_seguro_excel(value)
         for value in hoja1.get("Enlace", pd.Series(dtype=object)).tolist()
@@ -1147,6 +1234,55 @@ def generate_protocol_document(
         for file_path in _iter_files_recursive(ruta_evidencias, max_depth=12)
         if file_path.suffix.lower() in IMAGE_EXTENSIONS
     )
+    total_imagenes_esperadas = sum(
+        1
+        for value in hoja2["Foto"].tolist()
+        if texto_seguro_excel(value)
+    )
+    imagenes_procesadas = 0
+    progress_update_step = max(1, total_imagenes_esperadas // 100)
+    last_progress_percentage = -1
+
+    def report_processing_progress(
+        *,
+        current_site: int,
+        current_site_name: str,
+        force: bool = False,
+    ) -> None:
+        nonlocal last_progress_percentage
+
+        image_ratio = (
+            imagenes_procesadas / total_imagenes_esperadas
+            if total_imagenes_esperadas
+            else 0.0
+        )
+        site_ratio = (
+            max(0, current_site - 1) / total_sitios
+            if total_sitios
+            else 0.0
+        )
+        work_ratio = image_ratio if total_imagenes_esperadas else site_ratio
+        percentage = 30 + int(min(1.0, work_ratio) * 56)
+
+        if not force and percentage == last_progress_percentage:
+            return
+
+        last_progress_percentage = percentage
+        _emit_progress(
+            progress_callback,
+            stage="processing_sites",
+            percentage=percentage,
+            message=(
+                f"Procesando sitio {current_site} de {total_sitios}: "
+                f"{current_site_name}"
+            ),
+            current_site=current_site,
+            total_sites=total_sitios,
+            current_site_name=current_site_name,
+            processed_images=imagenes_procesadas,
+            total_images=total_imagenes_esperadas,
+            detected_images=total_imagenes_en_zip,
+        )
 
     logger.info(
         "Diagnóstico del ZIP: raíz='%s', imágenes detectadas=%s.",
@@ -1164,10 +1300,38 @@ def generate_protocol_document(
     if total_sitios == 0:
         raise ValueError("La primera hoja del Excel no contiene registros.")
 
+    _emit_progress(
+        progress_callback,
+        stage="analyzing_evidence",
+        percentage=28,
+        message=(
+            f"Se detectaron {total_imagenes_en_zip} imágenes en el ZIP. "
+            "Iniciando la integración de evidencias."
+        ),
+        total_sites=total_sitios,
+        total_images=total_imagenes_esperadas,
+        detected_images=total_imagenes_en_zip,
+    )
+    _emit_progress(
+        progress_callback,
+        stage="processing_sites",
+        percentage=30,
+        message="Iniciando el procesamiento de sitios y evidencias.",
+        total_sites=total_sitios,
+        total_images=total_imagenes_esperadas,
+        detected_images=total_imagenes_en_zip,
+    )
+
     for index, fila_sitio in hoja1.iterrows():
         id_sitio = texto_seguro_excel(fila_sitio["ID"])
         nombre_sitio_real = texto_seguro_excel(fila_sitio["Sitio"])
         nombre_enlace = texto_seguro_excel(fila_sitio.get("Enlace", ""))
+        site_number = index + 1
+        report_processing_progress(
+            current_site=site_number,
+            current_site_name=nombre_sitio_real,
+            force=True,
+        )
         tipo_sitio_original = texto_seguro_excel(
             fila_sitio.get("TipoDeSitio", "")
         ).upper()
@@ -1347,6 +1511,16 @@ def generate_protocol_document(
                     )
 
                 lista_individual.append(datos_bloque)
+                imagenes_procesadas += 1
+
+                if (
+                    imagenes_procesadas % progress_update_step == 0
+                    or imagenes_procesadas == total_imagenes_esperadas
+                ):
+                    report_processing_progress(
+                        current_site=site_number,
+                        current_site_name=nombre_sitio_real,
+                    )
 
             lista_pares = []
 
@@ -1401,6 +1575,23 @@ def generate_protocol_document(
         temporal_path = temp_dir / f"temp_sitio_{safe_id}_{index}.docx"
         template.save(str(temporal_path))
         archivos_generados.append(temporal_path)
+        report_processing_progress(
+            current_site=site_number,
+            current_site_name=nombre_sitio_real,
+            force=True,
+        )
+
+    _emit_progress(
+        progress_callback,
+        stage="writing_diagnostics",
+        percentage=88,
+        message="Preparando el resumen de evidencias y observaciones.",
+        current_site=total_sitios,
+        total_sites=total_sitios,
+        processed_images=imagenes_procesadas,
+        total_images=total_imagenes_esperadas,
+        detected_images=total_imagenes_en_zip,
+    )
 
     logger.info(
         "Resumen de imágenes: detectadas_en_zip=%s, insertadas=%s, "
@@ -1441,6 +1632,18 @@ def generate_protocol_document(
         encoding="utf-8",
     )
 
+    _emit_progress(
+        progress_callback,
+        stage="writing_diagnostics",
+        percentage=91,
+        message="Resumen de evidencias generado.",
+        current_site=total_sitios,
+        total_sites=total_sitios,
+        processed_images=imagenes_procesadas,
+        total_images=total_imagenes_esperadas,
+        detected_images=total_imagenes_en_zip,
+    )
+
     if total_imagenes_insertadas == 0:
         raise ValueError(
             "El ZIP sí contiene imágenes, pero ninguna pudo asociarse con la "
@@ -1452,15 +1655,68 @@ def generate_protocol_document(
     if not archivos_generados:
         raise ValueError("No se generaron documentos.")
 
+    _emit_progress(
+        progress_callback,
+        stage="assembling_document",
+        percentage=92,
+        message="Uniendo los documentos de cada sitio.",
+        current_site=total_sitios,
+        total_sites=total_sitios,
+        processed_images=imagenes_procesadas,
+        total_images=total_imagenes_esperadas,
+        detected_images=total_imagenes_en_zip,
+    )
+
     documento_base = Document(str(archivos_generados[0]))
     composer = Composer(documento_base)
+    total_archivos = len(archivos_generados)
 
-    for archivo in archivos_generados[1:]:
+    for document_index, archivo in enumerate(archivos_generados[1:], start=2):
         documento_base.add_page_break()
         documento_temporal = Document(str(archivo))
         composer.append(documento_temporal)
 
+        assembly_percentage = 92 + int(
+            (document_index / max(1, total_archivos)) * 5
+        )
+        _emit_progress(
+            progress_callback,
+            stage="assembling_document",
+            percentage=min(97, assembly_percentage),
+            message=(
+                f"Uniendo documento {document_index} de {total_archivos}."
+            ),
+            current_site=total_sitios,
+            total_sites=total_sitios,
+            processed_images=imagenes_procesadas,
+            total_images=total_imagenes_esperadas,
+            detected_images=total_imagenes_en_zip,
+        )
+
+    _emit_progress(
+        progress_callback,
+        stage="saving_document",
+        percentage=98,
+        message="Guardando el documento Word final.",
+        current_site=total_sitios,
+        total_sites=total_sitios,
+        processed_images=imagenes_procesadas,
+        total_images=total_imagenes_esperadas,
+        detected_images=total_imagenes_en_zip,
+    )
     composer.save(str(output_docx_path))
+
+    _emit_progress(
+        progress_callback,
+        stage="saving_document",
+        percentage=99,
+        message="Documento Word creado. Preparando la descarga.",
+        current_site=total_sitios,
+        total_sites=total_sitios,
+        processed_images=imagenes_procesadas,
+        total_images=total_imagenes_esperadas,
+        detected_images=total_imagenes_en_zip,
+    )
 
     if not output_docx_path.exists() or output_docx_path.stat().st_size == 0:
         raise RuntimeError("El documento Word no se generó correctamente.")
@@ -1477,6 +1733,11 @@ def generate_protocol_document(
         ),
         diagnostics_path=diagnostics_path,
     )
+
+
+
+
+
 
 
 
@@ -1757,8 +2018,6 @@ def generate_protocol_document(
 #     best_score, best_candidate = scored_candidates[0]
 #     second_score = scored_candidates[1][0] if len(scored_candidates) > 1 else 0.0
 
-#     # El margen evita escoger una carpeta equivocada cuando existen dos
-#     # candidatas muy parecidas.
 #     if best_score >= 0.62 and (best_score - second_score >= 0.08 or best_score >= 0.90):
 #         logger.info(
 #             "Clasificación asociada aproximadamente: '%s' -> '%s' (%.2f).",
@@ -2272,7 +2531,6 @@ def generate_protocol_document(
 #     ).strip()
 #     file_base = _strip_supported_image_extension(file_path.name).strip()
 
-   
 #     if requested_base.casefold() == file_base.casefold():
 #         return True
 
@@ -2294,6 +2552,8 @@ def generate_protocol_document(
 #             return str(int(numeric_prefix.group(1))) == requested_id
 
 #     return False
+
+
 
 # def buscar_imagen_flexible(
 #     ruta_carpeta: str | Path | None,
@@ -2319,7 +2579,7 @@ def generate_protocol_document(
 #         return matches[0]
 
 #     if len(matches) > 1:
-       
+#         # Preferir el archivo menos profundo y con nombre más corto.
 #         matches.sort(
 #             key=lambda item: (
 #                 len(item.relative_to(Path(ruta_carpeta)).parts),
@@ -2968,5 +3228,12 @@ def generate_protocol_document(
 #         ),
 #         diagnostics_path=diagnostics_path,
 #     )
+
+
+
+
+
+
+
 
 
