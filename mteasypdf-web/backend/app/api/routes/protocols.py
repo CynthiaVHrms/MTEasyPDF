@@ -572,6 +572,26 @@ async def generate_protocol_document_endpoint(
         shutil.rmtree(request_dir, ignore_errors=True)
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # from __future__ import annotations
 
 # import json
@@ -857,3 +877,17 @@ async def generate_protocol_document_endpoint(
 #         await excel_file.close()
 #         await evidence_zip.close()
 #         shutil.rmtree(request_dir, ignore_errors=True)
+
+
+
+
+
+
+
+
+
+
+
+
+
+

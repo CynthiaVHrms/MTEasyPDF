@@ -1744,11 +1744,6 @@ def generate_protocol_document(
 
 
 
-
-
-
-
-
 # from __future__ import annotations
 
 # import datetime
@@ -3228,12 +3223,5 @@ def generate_protocol_document(
 #         ),
 #         diagnostics_path=diagnostics_path,
 #     )
-
-
-
-
-
-
-
 
 
