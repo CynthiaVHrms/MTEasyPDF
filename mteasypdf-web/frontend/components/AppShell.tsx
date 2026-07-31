@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { ReportForm } from "@/features/reports/ReportForm";
 import { ProtocolsSection } from "@/features/protocols/ProtocolsSection";
 import { DocumentationCard } from "@/components/DocumentationCard";
@@ -35,14 +36,33 @@ export function AppShell() {
     <main className="min-h-screen bg-slate-100">
       <div className="mx-auto max-w-7xl px-6 py-8">
         <header className="mb-6 rounded-[2rem] bg-linear-to-r from-blue-700 to-slate-950 px-8 py-8 text-white shadow-xl">
-          <p className="text-xs font-semibold uppercase tracking-[0.35em] text-blue-100">
-            HEMAC Automation Engine
-          </p>
-          <h1 className="mt-3 text-4xl font-bold">M.I.A Módulo de Información y Anexos</h1>
-          <p className="mt-3 max-w-3xl text-sm leading-6 text-blue-100">
-            Plataforma interna para generación documental, Memorias Técnicas y
-            automatización de Protocolos C5.
-          </p>
+          <div className="flex items-center gap-5">
+            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-white/10 p-3 backdrop-blur-sm">
+              <Image
+                src="/mia/icons/mia.jpeg"
+                alt="Logo MIA"
+                width={72}
+                height={72}
+                priority
+                className="h-full w-full object-contain"
+              />
+            </div>
+
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.35em] text-blue-100">
+                HEMAC Automation Engine
+              </p>
+
+              <h1 className="mt-3 text-4xl font-bold">
+                M.I.A Módulo de Información y Anexos
+              </h1>
+
+              <p className="mt-3 max-w-3xl text-sm leading-6 text-blue-100">
+                Plataforma interna para generación documental, Memorias Técnicas y
+                automatización de Protocolos C5.
+              </p>
+            </div>
+          </div>
         </header>
 
         <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
@@ -60,19 +80,17 @@ export function AppShell() {
                     key={module.id}
                     type="button"
                     onClick={() => setActiveModule(module.id)}
-                    className={`w-full rounded-2xl border px-4 py-4 text-left transition ${
-                      active
-                        ? "border-blue-500 bg-blue-50 shadow-sm"
-                        : "border-slate-200 bg-white hover:border-blue-200 hover:bg-slate-50"
-                    }`}
+                    className={`w-full rounded-2xl border px-4 py-4 text-left transition ${active
+                      ? "border-blue-500 bg-blue-50 shadow-sm"
+                      : "border-slate-200 bg-white hover:border-blue-200 hover:bg-slate-50"
+                      }`}
                   >
                     <div className="flex items-center gap-3">
                       <div
-                        className={`flex h-11 w-11 items-center justify-center rounded-xl text-xl ${
-                          active
-                            ? "bg-blue-600 text-white"
-                            : "bg-slate-100 text-slate-600"
-                        }`}
+                        className={`flex h-11 w-11 items-center justify-center rounded-xl text-xl ${active
+                          ? "bg-blue-600 text-white"
+                          : "bg-slate-100 text-slate-600"
+                          }`}
                       >
                         {module.icon}
                       </div>
