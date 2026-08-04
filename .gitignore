@@ -4,3 +4,4 @@ ejemplo.zip
 /__pycache__
 /__pycache__
 *.pyc
+/frontend/node_modules
