@@ -1,5 +1,5 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ??
-  "http://10.241.1.8:8003";
+  "http://10.241.1.8:8001";
 
 
 export type DuplicateWordTag = {
