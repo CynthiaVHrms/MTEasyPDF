@@ -2,16 +2,19 @@
  * auth-check.tsx — Componente servidor que verifica la sesión.
  *
  * Corre SOLO en el servidor, antes de renderizar la página.
- * Si no hay sesión válida, redirige a REDIRECT_ON_FAILURE.
+ * Si no hay sesión válida, devuelve RedirectExternal que hace
+ * la redirección cross-origin en el cliente.
  *
- * Uso: importar y usar en el layout root o en páginas protegidas.
+ * Nota: No se usa redirect() de next/navigation para URLs externas porque
+ * Next.js 16 en Server Components extrae solo el pathname y lo resuelve
+ * contra el host actual, ignorando el origen de la URL destino.
  */
 
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 import { jwtVerify } from "jose";
+import { RedirectExternal } from "@/components/RedirectExternal";
 
-export async function AuthCheck(): Promise<null> {
+export async function AuthCheck(): Promise<React.ReactNode> {
   const authEnabled = process.env.AUTH_ENABLED !== "false";
 
   // Modo debug: auth desactivada
@@ -23,9 +26,9 @@ export async function AuthCheck(): Promise<null> {
   const token = cookieStore.get("mia_auth")?.value;
   const redirectOnFailure = process.env.REDIRECT_ON_FAILURE ?? "http://localhost";
 
-  // Sin cookie o cookie vacía
+  // Sin cookie — redirigir a Herramientas Conexión
   if (!token) {
-    redirect(redirectOnFailure);
+    return <RedirectExternal url={redirectOnFailure} />;
   }
 
   try {
@@ -39,7 +42,7 @@ export async function AuthCheck(): Promise<null> {
 
     return null;
   } catch {
-    // Token inválido o expirado
-    redirect(redirectOnFailure);
+    // Token inválido o expirado — redirigir a Herramientas Conexión
+    return <RedirectExternal url={redirectOnFailure} />;
   }
 }
