@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes.health import router as health_router
@@ -6,6 +6,7 @@ from app.api.routes.protocols import router as protocols_router
 from app.api.routes.reports import router as reports_router
 from app.api.routes.tagged_documents import router as tagged_documents_router
 from app.api.routes.template_downloads import router as template_downloads_router
+from app.core.dependencies import require_auth
 
 
 app = FastAPI(
@@ -44,9 +45,9 @@ app.add_middleware(
 
 
 app.include_router(health_router)
-app.include_router(reports_router)
-app.include_router(protocols_router)
-app.include_router(tagged_documents_router)
-app.include_router(template_downloads_router)
+app.include_router(reports_router, dependencies=[Depends(require_auth)])
+app.include_router(protocols_router, dependencies=[Depends(require_auth)])
+app.include_router(tagged_documents_router, dependencies=[Depends(require_auth)])
+app.include_router(template_downloads_router, dependencies=[Depends(require_auth)])
 
 
