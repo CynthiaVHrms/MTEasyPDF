@@ -1,6 +1,4 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ??
-  process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ??
-  "/mia-api";
+import { API_BASE_URL } from "@/features/apiBaseUrl";
 
 const REQUEST_TIMEOUT_MS = 30000;
 

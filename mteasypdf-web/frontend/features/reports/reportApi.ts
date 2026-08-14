@@ -1,15 +1,11 @@
+import { API_BASE_URL } from "@/features/apiBaseUrl";
+
 export type GenerateReportResponse = {
   job_id: string;
   status: string;
   download_url: string;
   zip_path: string;
 };
-
-
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ??
-  process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ??
-  "/mia-api";
 
 const REQUEST_TIMEOUT_MS = 30000;
 
