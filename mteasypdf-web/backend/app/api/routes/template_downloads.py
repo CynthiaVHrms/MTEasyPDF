@@ -18,11 +18,15 @@ TEMPLATE_ROOT = (
     / "assets"
     / "templates"
 )
+ASSETS_ROOT = Path(__file__).resolve().parents[2] / "assets"
+MANUAL_FILENAME = "Manual_Usuario_MIA_v2.1.0.pdf"
+MANUAL_PATH = ASSETS_ROOT / MANUAL_FILENAME
 
 XLSX_MEDIA_TYPE = (
     "application/vnd.openxmlformats-officedocument."
     "spreadsheetml.sheet"
 )
+PDF_MEDIA_TYPE = "application/pdf"
 
 
 @dataclass(frozen=True)
@@ -106,6 +110,31 @@ def list_templates() -> dict[str, object]:
             for template in TEMPLATES.values()
         ]
     }
+
+
+@router.get("/manual/download", response_class=FileResponse)
+def download_user_manual() -> FileResponse:
+    """
+    Descarga del manual oficial de usuario de MIA.
+    """
+
+    if not MANUAL_PATH.is_file():
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "El manual de usuario no está disponible en esta "
+                "instalación. Verifica el despliegue del backend."
+            ),
+        )
+
+    return FileResponse(
+        path=MANUAL_PATH,
+        filename=MANUAL_FILENAME,
+        media_type=PDF_MEDIA_TYPE,
+        headers={
+            "Cache-Control": "no-store",
+        },
+    )
 
 
 @router.get("/{template_id}/download", response_class=FileResponse)

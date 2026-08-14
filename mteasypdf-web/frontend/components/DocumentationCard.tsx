@@ -1,3 +1,5 @@
+import { API_BASE_URL } from "@/features/apiBaseUrl";
+
 export function DocumentationCard() {
   return (
     <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
@@ -32,8 +34,7 @@ export function DocumentationCard() {
           </div>
 
           <a
-            href="/docs/Manual de Usuario MTEasy.pdf"
-            download
+            href={`${API_BASE_URL}/protocols/templates/manual/download`}
             className="inline-flex justify-center rounded-2xl bg-blue-800 px-6 py-4 text-sm font-bold text-white shadow-lg transition hover:bg-blue-900"
           >
             Descargar manual PDF
