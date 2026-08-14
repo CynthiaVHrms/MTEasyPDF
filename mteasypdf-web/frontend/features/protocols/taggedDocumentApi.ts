@@ -1,13 +1,18 @@
 import { API_BASE_URL } from "@/features/apiBaseUrl";
 
 const REQUEST_TIMEOUT_MS = 30000;
+const UPLOAD_REQUEST_TIMEOUT_MS = 0;
 
 async function fetchWithTimeout(
   input: RequestInfo | URL,
   init: RequestInit,
+  timeoutMs: number = REQUEST_TIMEOUT_MS,
 ): Promise<Response> {
   const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timeout =
+    timeoutMs > 0
+      ? window.setTimeout(() => controller.abort(), timeoutMs)
+      : null;
 
   try {
     return await fetch(input, {
@@ -21,7 +26,9 @@ async function fetchWithTimeout(
 
     throw new Error("No hubo respuesta del backend. Revisa conectividad y URL de API.");
   } finally {
-    window.clearTimeout(timeout);
+    if (timeout !== null) {
+      window.clearTimeout(timeout);
+    }
   }
 }
 
@@ -68,6 +75,10 @@ async function readApiError(
   response: Response,
   fallback: string,
 ): Promise<string> {
+  if (response.status === 413) {
+    return "El archivo supera el tamaño permitido por el servidor.";
+  }
+
   const payload: unknown = await response.json().catch(() => null);
 
   if (
@@ -168,6 +179,7 @@ export async function generateValidatedTaggedDocument(
       method: "POST",
       body: formData,
     },
+    UPLOAD_REQUEST_TIMEOUT_MS,
   );
 
   if (!response.ok) {

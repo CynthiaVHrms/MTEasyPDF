@@ -12,6 +12,7 @@ from uuid import uuid4
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 
+from app.core.config import settings
 from app.protocols_escudo_c5.document_editor import (
     TAGGED_OUTPUT_DOCX_FILENAME,
     TAG_STRUCTURE_ZIP_FILENAME,
@@ -36,11 +37,19 @@ WORD_MEDIA_TYPE = (
 )
 
 
+def max_upload_size_bytes() -> int:
+    return settings.max_upload_size_mb * 1024 * 1024
+
+
+def max_upload_size_label() -> str:
+    return f"{settings.max_upload_size_mb} MB"
+
+
 def storage_root() -> Path:
-    configured_path = os.getenv(
-        "MTEASYPDF_STORAGE_DIR",
-        "",
-    ).strip()
+    configured_path = (
+        os.getenv("MTEASYPDF_STORAGE_DIR", "").strip()
+        or str(settings.storage_dir)
+    )
 
     if configured_path:
         root = Path(configured_path)
@@ -96,6 +105,8 @@ async def save_upload(
     destination: Path,
 ) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
+    total_written = 0
+    limit_bytes = max_upload_size_bytes()
 
     try:
         with destination.open("wb") as output_file:
@@ -103,7 +114,21 @@ async def save_upload(
                 chunk = await upload.read(1024 * 1024)
                 if not chunk:
                     break
+                total_written += len(chunk)
+                if total_written > limit_bytes:
+                    raise HTTPException(
+                        status_code=413,
+                        detail=(
+                            "El archivo "
+                            f"{upload.filename or 'seleccionado'} "
+                            "supera el tamaño máximo permitido "
+                            f"({max_upload_size_label()})."
+                        ),
+                    )
                 output_file.write(chunk)
+    except HTTPException:
+        destination.unlink(missing_ok=True)
+        raise
     except OSError as exc:
         raise HTTPException(
             status_code=500,

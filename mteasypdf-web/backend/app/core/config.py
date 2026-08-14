@@ -35,7 +35,7 @@ class Settings(BaseSettings):
 
     app_name: str = "MTEasyPDF Web"
     storage_dir: Path = Path("C:/mteasypdf_jobs")
-    max_upload_size_mb: int = 1024
+    max_upload_size_mb: int = 3072
     retention_days: int = 7
 
     # --- Autenticación JWT ---

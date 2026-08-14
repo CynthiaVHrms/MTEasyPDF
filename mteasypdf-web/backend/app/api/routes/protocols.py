@@ -44,6 +44,14 @@ WORD_MEDIA_TYPE = (
 )
 
 
+def max_upload_size_bytes() -> int:
+    return settings.max_upload_size_mb * 1024 * 1024
+
+
+def max_upload_size_label() -> str:
+    return f"{settings.max_upload_size_mb} MB"
+
+
 def protocols_dir() -> Path:
     return Path(settings.storage_dir) / "protocols"
 
@@ -103,13 +111,32 @@ def save_upload(upload: UploadFile, destination: Path) -> None:
 
     destination.parent.mkdir(parents=True, exist_ok=True)
     upload.file.seek(0)
+    total_written = 0
+    limit_bytes = max_upload_size_bytes()
 
-    with destination.open("wb") as output_file:
-        shutil.copyfileobj(
-            upload.file,
-            output_file,
-            length=1024 * 1024,
-        )
+    try:
+        with destination.open("wb") as output_file:
+            while True:
+                chunk = upload.file.read(1024 * 1024)
+                if not chunk:
+                    break
+
+                total_written += len(chunk)
+                if total_written > limit_bytes:
+                    raise HTTPException(
+                        status_code=413,
+                        detail=(
+                            "El archivo "
+                            f"{upload.filename or 'seleccionado'} "
+                            "supera el tamaño máximo permitido "
+                            f"({max_upload_size_label()})."
+                        ),
+                    )
+
+                output_file.write(chunk)
+    except HTTPException:
+        destination.unlink(missing_ok=True)
+        raise
 
     if not destination.exists() or destination.stat().st_size == 0:
         raise ValueError("El archivo recibido está vacío.")

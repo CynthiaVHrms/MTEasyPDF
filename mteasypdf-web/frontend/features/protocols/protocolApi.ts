@@ -1,14 +1,19 @@
 import { API_BASE_URL } from "@/features/apiBaseUrl";
 
 const REQUEST_TIMEOUT_MS = 30000;
+const UPLOAD_REQUEST_TIMEOUT_MS = 0;
 
 async function fetchWithTimeout(
   input: RequestInfo | URL,
   init: RequestInit,
   signal?: AbortSignal,
+  timeoutMs: number = REQUEST_TIMEOUT_MS,
 ): Promise<Response> {
   const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timeout =
+    timeoutMs > 0
+      ? window.setTimeout(() => controller.abort(), timeoutMs)
+      : null;
 
   const onAbort = () => controller.abort();
   if (signal) {
@@ -35,7 +40,9 @@ async function fetchWithTimeout(
 
     throw new Error("No hubo respuesta del backend. Revisa conectividad y URL de API.");
   } finally {
-    window.clearTimeout(timeout);
+    if (timeout !== null) {
+      window.clearTimeout(timeout);
+    }
     if (signal) {
       signal.removeEventListener("abort", onAbort);
     }
@@ -127,6 +134,10 @@ async function getErrorMessage(
   response: Response,
   fallbackMessage: string,
 ): Promise<string> {
+  if (response.status === 413) {
+    return "El archivo ZIP supera el tamaño permitido por el servidor.";
+  }
+
   const errorPayload = await response.json().catch(() => null);
 
   if (
@@ -173,7 +184,7 @@ export async function createC5DocumentJob(
   const response = await fetchWithTimeout(`${API_BASE_URL}/protocols/document/jobs`, {
     method: "POST",
     body: formData,
-  }, signal);
+  }, signal, UPLOAD_REQUEST_TIMEOUT_MS);
 
   if (!response.ok) {
     throw new Error(
