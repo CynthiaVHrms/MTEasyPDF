@@ -1,5 +1,31 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ??
-  "http://10.241.1.8:8001";
+  process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ??
+  "/mia-api";
+
+const REQUEST_TIMEOUT_MS = 30000;
+
+async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init: RequestInit,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error("El servidor tardó demasiado en responder. Intenta nuevamente.");
+    }
+
+    throw new Error("No hubo respuesta del backend. Revisa conectividad y URL de API.");
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
 
 
 export type DuplicateWordTag = {
@@ -81,7 +107,7 @@ export async function validateTaggedDocument(
   formData.append("excel_file", excelFile);
   formData.append("tagged_document", wordFile);
 
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `${API_BASE_URL}/protocols/document-tags-v2/validate`,
     {
       method: "POST",
@@ -107,7 +133,7 @@ export async function generateTaggedFolders(
   const formData = new FormData();
   formData.append("excel_file", excelFile);
 
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `${API_BASE_URL}/protocols/document-tags-v2/folders/generate`,
     {
       method: "POST",
@@ -138,7 +164,7 @@ export async function generateValidatedTaggedDocument(
   formData.append("tagged_document", wordFile);
   formData.append("evidence_zip", evidenceZip);
 
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `${API_BASE_URL}/protocols/document-tags-v2/generate`,
     {
       method: "POST",
@@ -165,7 +191,7 @@ export async function generateValidatedTaggedDocument(
     );
   }
 
-  const diagnosticsResponse = await fetch(
+  const diagnosticsResponse = await fetchWithTimeout(
     `${API_BASE_URL}/protocols/document-tags-v2/${jobId}/diagnostics`,
     { method: "GET" },
   );

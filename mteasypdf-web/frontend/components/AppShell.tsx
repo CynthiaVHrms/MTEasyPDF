@@ -8,6 +8,10 @@ import { DocumentationCard } from "@/components/DocumentationCard";
 
 type Module = "mteasy" | "c5" | "docs";
 
+type AppShellProps = {
+  initialModule?: Module;
+};
+
 const modules = [
   {
     id: "mteasy" as const,
@@ -29,8 +33,8 @@ const modules = [
   },
 ];
 
-export function AppShell() {
-  const [activeModule, setActiveModule] = useState<Module>("mteasy");
+export function AppShell({ initialModule = "mteasy" }: AppShellProps) {
+  const [activeModule, setActiveModule] = useState<Module>(initialModule);
 
   return (
     <main className="min-h-screen bg-slate-100">

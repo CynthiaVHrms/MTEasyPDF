@@ -8,13 +8,39 @@ export type GenerateReportResponse = {
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ??
-  "http://10.241.1.8:8001";
+  process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ??
+  "/mia-api";
+
+const REQUEST_TIMEOUT_MS = 30000;
+
+async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init: RequestInit,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error("El servidor tardó demasiado en responder. Intenta nuevamente.");
+    }
+
+    throw new Error("No hubo respuesta del backend. Revisa conectividad y URL de API.");
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
 
 
 export async function generateReport(
   formData: FormData
 ): Promise<GenerateReportResponse> {
-  const response = await fetch(`${API_BASE_URL}/reports/generate`, {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/reports/generate`, {
     method: "POST",
     body: formData,
   });

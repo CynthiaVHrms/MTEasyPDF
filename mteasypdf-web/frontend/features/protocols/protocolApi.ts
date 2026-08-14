@@ -1,6 +1,49 @@
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ??
-  "http://10.241.1.8:8001";
+  process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ??
+  "/mia-api";
+
+const REQUEST_TIMEOUT_MS = 30000;
+
+async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init: RequestInit,
+  signal?: AbortSignal,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  const onAbort = () => controller.abort();
+  if (signal) {
+    if (signal.aborted) {
+      controller.abort();
+    } else {
+      signal.addEventListener("abort", onAbort, { once: true });
+    }
+  }
+
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      if (signal?.aborted) {
+        throw error;
+      }
+
+      throw new Error("El servidor tardó demasiado en responder. Intenta nuevamente.");
+    }
+
+    throw new Error("No hubo respuesta del backend. Revisa conectividad y URL de API.");
+  } finally {
+    window.clearTimeout(timeout);
+    if (signal) {
+      signal.removeEventListener("abort", onAbort);
+    }
+  }
+}
 
 export type MissingImageDiagnostic = {
   sitio: string;
@@ -105,7 +148,7 @@ export async function generateC5Folders(excelFile: File): Promise<void> {
   const formData = new FormData();
   formData.append("excel_file", excelFile);
 
-  const response = await fetch(`${API_BASE_URL}/protocols/folders/generate`, {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/protocols/folders/generate`, {
     method: "POST",
     body: formData,
   });
@@ -130,11 +173,10 @@ export async function createC5DocumentJob(
   formData.append("excel_file", excelFile);
   formData.append("evidence_zip", evidenceZip);
 
-  const response = await fetch(`${API_BASE_URL}/protocols/document/jobs`, {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/protocols/document/jobs`, {
     method: "POST",
     body: formData,
-    signal,
-  });
+  }, signal);
 
   if (!response.ok) {
     throw new Error(
@@ -152,13 +194,13 @@ export async function getC5DocumentJobStatus(
   jobId: string,
   signal?: AbortSignal,
 ): Promise<ProtocolDocumentJobStatus> {
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `${API_BASE_URL}/protocols/document/${encodeURIComponent(jobId)}/status`,
     {
       method: "GET",
       cache: "no-store",
-      signal,
     },
+    signal,
   );
 
   if (!response.ok) {
@@ -177,13 +219,13 @@ export async function downloadC5Document(
   jobId: string,
   signal?: AbortSignal,
 ): Promise<void> {
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `${API_BASE_URL}/protocols/document/${encodeURIComponent(jobId)}/download`,
     {
       method: "GET",
       cache: "no-store",
-      signal,
     },
+    signal,
   );
 
   if (!response.ok) {
@@ -204,15 +246,15 @@ export async function getC5DocumentDiagnostics(
   signal?: AbortSignal,
 ): Promise<ProtocolGenerationDiagnostics | null> {
   try {
-    const response = await fetch(
+    const response = await fetchWithTimeout(
       `${API_BASE_URL}/protocols/document/${encodeURIComponent(
         jobId,
       )}/diagnostics`,
       {
         method: "GET",
         cache: "no-store",
-        signal,
       },
+      signal,
     );
 
     if (!response.ok) {

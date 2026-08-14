@@ -30,9 +30,37 @@
 import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 
+function getFailureRedirectUrl(): string {
+  return process.env.REDIRECT_ON_FAILURE || "http://localhost";
+}
+
+function getTokenFromRequest(request: NextRequest): string | null {
+  const tokenParam = request.nextUrl.searchParams.get("token")?.trim();
+  if (tokenParam) {
+    return tokenParam;
+  }
+
+  // Compatibilidad: algunos emisores mandan /auth?<JWT> en lugar de /auth?token=<JWT>
+  const rawSearch = request.nextUrl.search.startsWith("?")
+    ? request.nextUrl.search.slice(1)
+    : request.nextUrl.search;
+
+  if (!rawSearch) {
+    return null;
+  }
+
+  const firstPart = rawSearch.split("&")[0]?.trim();
+  if (!firstPart) {
+    return null;
+  }
+
+  const decoded = decodeURIComponent(firstPart);
+  return decoded.includes(".") ? decoded : null;
+}
+
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const authEnabled = process.env.AUTH_ENABLED !== "false";
-  const redirectOnFailure = process.env.REDIRECT_ON_FAILURE || "http://localhost";
+  const redirectOnFailure = getFailureRedirectUrl();
 
   // Modo debug: auth desactivada, pasar directo a la aplicación
   if (!authEnabled) {
@@ -40,7 +68,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.redirect(new URL("/mia", baseUrl));
   }
 
-  const token = request.nextUrl.searchParams.get("token");
+  const token = getTokenFromRequest(request);
 
   // Sin token en la URL — redirigir a Herramientas Conexión
   if (!token) {
