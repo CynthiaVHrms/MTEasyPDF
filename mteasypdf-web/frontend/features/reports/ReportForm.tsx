@@ -229,7 +229,7 @@ export function ReportForm() {
         <button
           type="submit"
           disabled={isGenerating}
-          className="w-full rounded-2xl bg-blue-700 px-6 py-4 text-base font-bold text-white shadow-lg transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+          className="w-full rounded-2xl bg-blue-800 px-6 py-4 text-base font-bold text-white shadow-lg transition hover:bg-blue-900 disabled:cursor-not-allowed disabled:bg-blue-600 disabled:text-blue-50"
         >
           {isGenerating
             ? "Generando memoria técnica..."

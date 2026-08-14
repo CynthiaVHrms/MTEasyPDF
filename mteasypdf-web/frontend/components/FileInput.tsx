@@ -27,7 +27,7 @@ export function FileInput({
         required={required}
         accept={accept}
         onChange={(event) => onChange(event.target.files?.[0] ?? null)}
-        className="block w-full cursor-pointer text-sm text-slate-600 file:mr-4 file:rounded-lg file:border-0 file:bg-blue-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-blue-700"
+        className="block w-full cursor-pointer text-sm text-slate-600 file:mr-4 file:rounded-lg file:border-0 file:bg-blue-700 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-blue-800"
       />
 
       {helperText && (

@@ -490,7 +490,7 @@ export function ProtocolsSection() {
                 className={`flex flex-1 items-center justify-center gap-3 rounded-xl px-4 py-3 text-left transition xl:min-w-60 ${
                   workspace === "new"
                     ? "bg-blue-600 text-white shadow-md"
-                    : "text-slate-600 hover:bg-slate-50"
+                    : "text-slate-900 hover:bg-slate-50"
                 }`}
               >
                 <span
@@ -506,7 +506,7 @@ export function ProtocolsSection() {
                   </span>
                   <span
                     className={`mt-0.5 hidden text-xs sm:block ${
-                      workspace === "new" ? "text-blue-100" : "text-slate-400"
+                      workspace === "new" ? "text-blue-100" : "text-slate-600"
                     }`}
                   >
                     Excel, carpetas y Word final
@@ -521,7 +521,7 @@ export function ProtocolsSection() {
                 className={`flex flex-1 items-center justify-center gap-3 rounded-xl px-4 py-3 text-left transition xl:min-w-60 ${
                   workspace === "complete"
                     ? "bg-violet-600 text-white shadow-md"
-                    : "text-slate-600 hover:bg-slate-50"
+                    : "text-slate-900 hover:bg-slate-50"
                 }`}
               >
                 <span
@@ -539,7 +539,7 @@ export function ProtocolsSection() {
                     className={`mt-0.5 hidden text-xs sm:block ${
                       workspace === "complete"
                         ? "text-violet-100"
-                        : "text-slate-400"
+                        : "text-slate-600"
                     }`}
                   >
                     Agregar secciones con etiquetas
@@ -598,7 +598,7 @@ export function ProtocolsSection() {
                   type="button"
                   onClick={handleDownloadSitesTemplate}
                   disabled={downloadingSitesTemplate}
-                  className="mt-4 inline-flex rounded-2xl bg-blue-700 px-4 py-3 text-sm font-black text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-300"
+                  className="mt-4 inline-flex rounded-2xl bg-blue-800 px-4 py-3 text-sm font-black text-white transition hover:bg-blue-900 disabled:cursor-not-allowed disabled:bg-blue-600 disabled:text-blue-50"
                 >
                   {downloadingSitesTemplate
                     ? "Descargando plantilla..."
@@ -621,7 +621,7 @@ export function ProtocolsSection() {
                 type="button"
                 onClick={handleGenerateFolders}
                 disabled={loadingFolders}
-                className="mt-auto w-full rounded-2xl bg-blue-700 px-6 py-4 pt-4 text-sm font-black text-white shadow-lg transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+                className="mt-auto w-full rounded-2xl bg-blue-800 px-6 py-4 pt-4 text-sm font-black text-white shadow-lg transition hover:bg-blue-900 disabled:cursor-not-allowed disabled:bg-blue-600 disabled:text-blue-50"
               >
                 {loadingFolders
                   ? "Generando estructura..."

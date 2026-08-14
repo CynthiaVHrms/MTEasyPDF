@@ -34,7 +34,7 @@ export function DocumentationCard() {
           <a
             href="/docs/Manual de Usuario MTEasy.pdf"
             download
-            className="inline-flex justify-center rounded-2xl bg-blue-700 px-6 py-4 text-sm font-bold text-white shadow-lg transition hover:bg-blue-800"
+            className="inline-flex justify-center rounded-2xl bg-blue-800 px-6 py-4 text-sm font-bold text-white shadow-lg transition hover:bg-blue-900"
           >
             Descargar manual PDF
           </a>

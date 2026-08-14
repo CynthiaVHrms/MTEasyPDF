@@ -39,3 +39,74 @@ textarea,
 label {
   pointer-events: auto;
 }
+
+button[class*="bg-blue-600"],
+button[class*="bg-blue-700"],
+button[class*="bg-blue-800"],
+button[class*="bg-blue-900"],
+a[class*="bg-blue-600"],
+a[class*="bg-blue-700"],
+a[class*="bg-blue-800"],
+a[class*="bg-blue-900"] {
+  color: #ffffff !important;
+}
+
+button:disabled[class*="bg-blue-"],
+a[aria-disabled="true"][class*="bg-blue-"] {
+  color: #eff6ff !important;
+}
+
+button[class*="bg-violet-600"],
+button[class*="bg-violet-700"],
+button[class*="bg-violet-800"],
+button[class*="bg-violet-900"],
+a[class*="bg-violet-600"],
+a[class*="bg-violet-700"],
+a[class*="bg-violet-800"],
+a[class*="bg-violet-900"] {
+  color: #ffffff !important;
+}
+
+button[class*="hover:bg-violet-"]:hover,
+a[class*="hover:bg-violet-"]:hover {
+  color: #ffffff !important;
+}
+
+button:disabled[class*="bg-violet-"],
+a[aria-disabled="true"][class*="bg-violet-"] {
+  color: #f5f3ff !important;
+}
+
+button[class*="bg-slate-900"],
+button[class*="bg-slate-950"],
+button[class*="bg-black"],
+a[class*="bg-slate-900"],
+a[class*="bg-slate-950"],
+a[class*="bg-black"] {
+  color: #ffffff !important;
+}
+
+button[class*="hover:bg-slate-700"]:hover,
+button[class*="hover:bg-slate-800"]:hover,
+button[class*="hover:bg-slate-900"]:hover,
+button[class*="hover:bg-slate-950"]:hover,
+button[class*="hover:bg-black"]:hover,
+a[class*="hover:bg-slate-700"]:hover,
+a[class*="hover:bg-slate-800"]:hover,
+a[class*="hover:bg-slate-900"]:hover,
+a[class*="hover:bg-slate-950"]:hover,
+a[class*="hover:bg-black"]:hover {
+  color: #ffffff !important;
+}
+
+button:disabled[class*="bg-slate-"],
+button:disabled[class*="bg-black"],
+a[aria-disabled="true"][class*="bg-slate-"],
+a[aria-disabled="true"][class*="bg-black"] {
+  color: #f8fafc !important;
+}
+
+input[type="file"]::file-selector-button,
+input[type="file"]::-webkit-file-upload-button {
+  color: #ffffff;
+}
