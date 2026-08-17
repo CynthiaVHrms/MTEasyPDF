@@ -1,20 +1,37 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --background: #f1f5f9;
   --foreground: #0f172a;
+  color-scheme: light;
+}
+
+html.dark {
+  --background: #020617;
+  --foreground: #e2e8f0;
+  color-scheme: dark;
 }
 
 * {
   box-sizing: border-box;
 }
 
+html {
+  background: var(--background);
+}
+
 body {
   margin: 0;
+  min-height: 100vh;
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
   user-select: text;
+  transition:
+    background-color 180ms ease,
+    color 180ms ease;
 }
 
 a {
@@ -109,4 +126,411 @@ a[aria-disabled="true"][class*="bg-black"] {
 input[type="file"]::file-selector-button,
 input[type="file"]::-webkit-file-upload-button {
   color: #ffffff;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Tema oscuro M.I.A                                                         */
+/* -------------------------------------------------------------------------- */
+
+html.dark ::selection {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Superficies principales                                                   */
+/* -------------------------------------------------------------------------- */
+
+html.dark [class~="bg-slate-100"] {
+  background-color: #020617 !important;
+}
+
+html.dark [class~="bg-white"] {
+  background-color: #0f172a !important;
+}
+
+html.dark [class~="bg-white/85"] {
+  background-color: rgb(15 23 42 / 0.9) !important;
+}
+
+html.dark [class~="bg-white/80"] {
+  background-color: rgb(15 23 42 / 0.86) !important;
+}
+
+html.dark [class~="bg-white/60"] {
+  background-color: rgb(30 41 59 / 0.75) !important;
+}
+
+html.dark [class~="bg-slate-50"],
+html.dark [class~="bg-slate-50/70"] {
+  background-color: #111827 !important;
+}
+
+html.dark [class~="bg-slate-200"] {
+  background-color: #334155 !important;
+}
+
+html.dark [class~="bg-slate-300"],
+html.dark [class~="bg-slate-400"] {
+  background-color: #475569 !important;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Superficies informativas y estados                                        */
+/* -------------------------------------------------------------------------- */
+
+html.dark [class~="bg-blue-50"],
+html.dark [class~="bg-blue-50/40"] {
+  background-color: rgb(30 64 175 / 0.2) !important;
+}
+
+html.dark [class~="bg-violet-50"],
+html.dark [class~="bg-violet-50/40"],
+html.dark [class~="bg-violet-50/60"] {
+  background-color: rgb(91 33 182 / 0.2) !important;
+}
+
+html.dark [class~="bg-emerald-50"] {
+  background-color: rgb(6 78 59 / 0.28) !important;
+}
+
+html.dark [class~="bg-amber-50"],
+html.dark [class~="bg-amber-50/60"] {
+  background-color: rgb(120 53 15 / 0.28) !important;
+}
+
+html.dark [class~="bg-amber-100"] {
+  background-color: rgb(146 64 14 / 0.38) !important;
+}
+
+html.dark [class~="bg-rose-50"],
+html.dark [class~="bg-rose-50/60"] {
+  background-color: rgb(136 19 55 / 0.24) !important;
+}
+
+html.dark [class~="bg-red-50"] {
+  background-color: rgb(127 29 29 / 0.26) !important;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Gradientes claros utilizados por Protocolos C5                            */
+/* -------------------------------------------------------------------------- */
+
+html.dark
+  [class~="from-white"][class~="via-blue-50/70"][class~="to-violet-50/60"] {
+  background-image: linear-gradient(
+    to bottom right,
+    #0f172a,
+    rgb(30 58 138 / 0.3),
+    rgb(76 29 149 / 0.22)
+  ) !important;
+}
+
+html.dark
+  [class~="from-white"][class~="via-violet-50/70"][class~="to-blue-50/70"] {
+  background-image: linear-gradient(
+    to bottom right,
+    #0f172a,
+    rgb(76 29 149 / 0.28),
+    rgb(30 58 138 / 0.24)
+  ) !important;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Bordes                                                                    */
+/* -------------------------------------------------------------------------- */
+
+html.dark [class~="border-slate-100"] {
+  border-color: #1e293b !important;
+}
+
+html.dark [class~="border-slate-200"],
+html.dark [class~="border-slate-300"] {
+  border-color: #334155 !important;
+}
+
+html.dark [class~="border-white"] {
+  border-color: rgb(255 255 255 / 0.14) !important;
+}
+
+html.dark [class~="border-blue-100"],
+html.dark [class~="border-blue-200"] {
+  border-color: rgb(59 130 246 / 0.34) !important;
+}
+
+html.dark [class~="border-violet-100"],
+html.dark [class~="border-violet-200"] {
+  border-color: rgb(139 92 246 / 0.34) !important;
+}
+
+html.dark [class~="border-emerald-100"],
+html.dark [class~="border-emerald-200"] {
+  border-color: rgb(16 185 129 / 0.32) !important;
+}
+
+html.dark [class~="border-amber-100"],
+html.dark [class~="border-amber-200"] {
+  border-color: rgb(245 158 11 / 0.34) !important;
+}
+
+html.dark [class~="border-rose-100"],
+html.dark [class~="border-rose-200"] {
+  border-color: rgb(244 63 94 / 0.34) !important;
+}
+
+html.dark [class~="border-red-200"] {
+  border-color: rgb(239 68 68 / 0.36) !important;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Texto neutro                                                              */
+/* -------------------------------------------------------------------------- */
+
+html.dark [class~="text-slate-950"] {
+  color: #f8fafc !important;
+}
+
+html.dark [class~="text-slate-900"] {
+  color: #f1f5f9 !important;
+}
+
+html.dark [class~="text-slate-800"] {
+  color: #e2e8f0 !important;
+}
+
+html.dark [class~="text-slate-700"] {
+  color: #cbd5e1 !important;
+}
+
+html.dark [class~="text-slate-600"] {
+  color: #b6c2d1 !important;
+}
+
+html.dark [class~="text-slate-500"] {
+  color: #94a3b8 !important;
+}
+
+html.dark [class~="text-slate-400"] {
+  color: #7f8da3 !important;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Texto azul                                                                */
+/* -------------------------------------------------------------------------- */
+
+html.dark [class~="text-blue-950"],
+html.dark [class~="text-blue-900"] {
+  color: #dbeafe !important;
+}
+
+html.dark [class~="text-blue-800"] {
+  color: #bfdbfe !important;
+}
+
+html.dark [class~="text-blue-700"] {
+  color: #93c5fd !important;
+}
+
+html.dark [class~="text-blue-600"] {
+  color: #60a5fa !important;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Texto violeta                                                             */
+/* -------------------------------------------------------------------------- */
+
+html.dark [class~="text-violet-950"],
+html.dark [class~="text-violet-900"] {
+  color: #ede9fe !important;
+}
+
+html.dark [class~="text-violet-800"] {
+  color: #ddd6fe !important;
+}
+
+html.dark [class~="text-violet-700"] {
+  color: #c4b5fd !important;
+}
+
+html.dark [class~="text-violet-600"] {
+  color: #a78bfa !important;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Texto verde                                                               */
+/* -------------------------------------------------------------------------- */
+
+html.dark [class~="text-emerald-950"] {
+  color: #d1fae5 !important;
+}
+
+html.dark [class~="text-emerald-800"] {
+  color: #a7f3d0 !important;
+}
+
+html.dark [class~="text-emerald-700"] {
+  color: #6ee7b7 !important;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Texto amarillo                                                            */
+/* -------------------------------------------------------------------------- */
+
+html.dark [class~="text-amber-950"],
+html.dark [class~="text-amber-900"] {
+  color: #fef3c7 !important;
+}
+
+html.dark [class~="text-amber-800"] {
+  color: #fde68a !important;
+}
+
+html.dark [class~="text-amber-700"] {
+  color: #fcd34d !important;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Texto de errores                                                          */
+/* -------------------------------------------------------------------------- */
+
+html.dark [class~="text-rose-950"] {
+  color: #ffe4e6 !important;
+}
+
+html.dark [class~="text-rose-800"] {
+  color: #fecdd3 !important;
+}
+
+html.dark [class~="text-rose-700"] {
+  color: #fda4af !important;
+}
+
+html.dark [class~="text-red-700"] {
+  color: #fca5a5 !important;
+}
+
+html.dark [class~="text-red-500"] {
+  color: #f87171 !important;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Inputs y formularios                                                      */
+/* -------------------------------------------------------------------------- */
+
+html.dark
+  input:not([type="checkbox"]):not([type="radio"]),
+html.dark textarea,
+html.dark select {
+  caret-color: #93c5fd;
+}
+
+html.dark input::placeholder,
+html.dark textarea::placeholder {
+  color: #64748b;
+  opacity: 1;
+}
+
+html.dark [class~="focus:ring-blue-100"]:focus {
+  --tw-ring-color:
+    rgb(59 130 246 / 0.28) !important;
+}
+
+html.dark [class~="ring-slate-200"],
+html.dark [class~="ring-slate-200/70"] {
+  --tw-ring-color:
+    rgb(71 85 105 / 0.72) !important;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Hover de controles secundarios                                            */
+/* -------------------------------------------------------------------------- */
+
+html.dark [class~="hover:bg-slate-50"]:hover {
+  background-color: #1e293b !important;
+}
+
+html.dark [class~="hover:bg-blue-50/40"]:hover {
+  background-color:
+    rgb(30 64 175 / 0.28) !important;
+}
+
+html.dark [class~="hover:bg-violet-50/40"]:hover {
+  background-color:
+    rgb(91 33 182 / 0.28) !important;
+}
+
+html.dark [class~="hover:border-blue-200"]:hover,
+html.dark [class~="hover:border-blue-300"]:hover {
+  border-color: #3b82f6 !important;
+}
+
+html.dark [class~="hover:border-violet-300"]:hover {
+  border-color: #8b5cf6 !important;
+}
+
+html.dark [class~="hover:text-violet-900"]:hover {
+  color: #ede9fe !important;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Estados deshabilitados                                                    */
+/* -------------------------------------------------------------------------- */
+
+html.dark [class~="disabled:bg-violet-300"]:disabled {
+  background-color: #4c1d95 !important;
+  color: #c4b5fd !important;
+}
+
+html.dark [class~="disabled:bg-slate-400"]:disabled {
+  background-color: #475569 !important;
+  color: #cbd5e1 !important;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Sombras                                                                   */
+/* -------------------------------------------------------------------------- */
+
+html.dark [class~="shadow-blue-100"],
+html.dark [class~="shadow-slate-200"],
+html.dark [class~="shadow-violet-200"] {
+  --tw-shadow-color:
+    rgb(0 0 0 / 0.35) !important;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Contraste de botones principales                                          */
+/* -------------------------------------------------------------------------- */
+
+html.dark button[class*="bg-blue-"],
+html.dark button[class*="bg-violet-"],
+html.dark button[class*="bg-emerald-"],
+html.dark button[class*="bg-slate-900"],
+html.dark a[class*="bg-blue-"],
+html.dark a[class*="bg-violet-"],
+html.dark a[class*="bg-emerald-"],
+html.dark a[class*="bg-slate-900"] {
+  color: #ffffff !important;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Scrollbar oscuro                                                          */
+/* -------------------------------------------------------------------------- */
+
+html.dark ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+html.dark ::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+
+html.dark ::-webkit-scrollbar-thumb {
+  background: #334155;
+  border: 2px solid #0f172a;
+  border-radius: 999px;
+}
+
+html.dark ::-webkit-scrollbar-thumb:hover {
+  background: #475569;
 }
