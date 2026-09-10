@@ -30,8 +30,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 
-function getFailureRedirectUrl(): string {
-  return process.env.REDIRECT_ON_FAILURE || "http://localhost";
+function getFailureRedirectUrl(request: NextRequest): URL {
+  return new URL("/mia/auth/failure", request.url);
+}
+
+function getClockToleranceSeconds(): number {
+  const raw = process.env.JWT_CLOCK_TOLERANCE_SEC?.trim();
+  const parsed = Number(raw);
+
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return 15;
+  }
+
+  return parsed;
 }
 
 function getTokenFromRequest(request: NextRequest): string | null {
@@ -60,7 +71,8 @@ function getTokenFromRequest(request: NextRequest): string | null {
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const authEnabled = process.env.AUTH_ENABLED !== "false";
-  const redirectOnFailure = getFailureRedirectUrl();
+  const redirectOnFailure = getFailureRedirectUrl(request);
+  const clockTolerance = getClockToleranceSeconds();
 
   // Modo debug: auth desactivada, pasar directo a la aplicación
   if (!authEnabled) {
@@ -72,6 +84,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   // Sin token en la URL — redirigir a Herramientas Conexión
   if (!token) {
+    console.warn("[auth] Missing token in /mia/auth request");
     return NextResponse.redirect(redirectOnFailure);
   }
 
@@ -83,6 +96,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       issuer: process.env.JWT_ISSUER ?? "suricato",
       audience: process.env.JWT_AUDIENCE ?? "mia",
       algorithms: ["HS256"], // Solo HS256 permitido — protege contra algorithm confusion
+      clockTolerance,
     });
 
     const baseUrl = `${request.nextUrl.protocol}//${request.nextUrl.host}`;
@@ -100,8 +114,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     });
 
     return response;
-  } catch {
+  } catch (error) {
     // Token inválido, expirado o con claims incorrectos
+    console.warn("[auth] Token validation failed:", error);
     return NextResponse.redirect(redirectOnFailure);
   }
 }

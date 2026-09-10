@@ -14,8 +14,20 @@ import { cookies } from "next/headers";
 import { jwtVerify } from "jose";
 import { RedirectExternal } from "@/components/RedirectExternal";
 
+function getClockToleranceSeconds(): number {
+  const raw = process.env.JWT_CLOCK_TOLERANCE_SEC?.trim();
+  const parsed = Number(raw);
+
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return 15;
+  }
+
+  return parsed;
+}
+
 export async function AuthCheck(): Promise<React.ReactNode> {
   const authEnabled = process.env.AUTH_ENABLED !== "false";
+  const clockTolerance = getClockToleranceSeconds();
 
   // Modo debug: auth desactivada
   if (!authEnabled) {
@@ -38,6 +50,7 @@ export async function AuthCheck(): Promise<React.ReactNode> {
       issuer: process.env.JWT_ISSUER ?? "suricato",
       audience: process.env.JWT_AUDIENCE ?? "mia",
       algorithms: ["HS256"],
+      clockTolerance,
     });
 
     return null;
